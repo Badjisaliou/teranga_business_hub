@@ -1,0 +1,26 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Root
+node_modules/
+
+# Backend
+backend/.env
+backend/vendor/
+backend/storage/logs/*.log
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/bootstrap/cache/*.php
+backend/.phpunit.result.cache
+
+# Frontends
+frontend/.next/
+frontend/node_modules/
+frontend/.env.local
+frontend/.env.production.local
+frontend-admin/.next/
+frontend-admin/node_modules/
+frontend-admin/.env.local
+frontend-admin/.env.production.local
