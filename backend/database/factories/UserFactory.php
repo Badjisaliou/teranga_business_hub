@@ -25,21 +25,55 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
+            'matricule' => 'TBH' . now()->format('ymd') . fake()->unique()->numberBetween(1000, 9999),
+            'nom' => fake()->lastName(),
+            'prenom' => fake()->firstName(),
             'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
+            'telephone' => '77' . fake()->unique()->numerify('#######'),
+            'numero_cni' => fake()->unique()->numerify('#############'),
+            'adresse' => fake()->address(),
             'password' => static::$password ??= Hash::make('password'),
+            'role' => 'membre',
+            'statut' => 'actif',
+            'date_adhesion' => now(),
+            'date_expiration' => now()->addYear(),
+            'cotisation_montant_mensuel' => 20000,
             'remember_token' => Str::random(10),
         ];
     }
 
-    /**
-     * Indicate that the model's email address should be unverified.
-     */
-    public function unverified(): static
+    public function admin(): static
     {
         return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
+            'role' => 'admin',
+            'statut' => 'actif',
+            'date_adhesion' => now(),
+            'date_expiration' => now()->addYear(),
+        ]);
+    }
+
+    public function member(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'membre',
+        ]);
+    }
+
+    public function pending(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'statut' => 'actif',
+            'date_adhesion' => now(),
+            'date_expiration' => now()->addYear(),
+        ]);
+    }
+
+    public function active(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'statut' => 'actif',
+            'date_adhesion' => now(),
+            'date_expiration' => now()->addYear(),
         ]);
     }
 }

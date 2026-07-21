@@ -15,8 +15,12 @@ class CotisationService
     ) {
     }
 
-    public function montantMensuel(): int
+    public function montantMensuel(?User $user = null): int
     {
+        if ($user?->cotisation_montant_mensuel !== null) {
+            return (int) $user->cotisation_montant_mensuel;
+        }
+
         return $this->businessSettingsService->getInt('cotisation_montant_mensuel');
     }
 

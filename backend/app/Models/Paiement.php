@@ -14,7 +14,9 @@ class Paiement extends Model
         'montant',
         'reference',
         'methode_paiement',
+        'canal_paiement',
         'statut',
+        'failure_reason',
         'date_paiement',
         'idempotency_key',
     ];

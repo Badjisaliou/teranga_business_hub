@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MobileMoneyTransaction;
+use App\Models\Paiement;
 use App\Services\PaiementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PaiementController extends Controller
 {
@@ -16,8 +20,9 @@ class PaiementController extends Controller
     {
         $validated = $request->validate([
             'montant' => ['nullable', 'integer', 'min:100'],
-            'telephone' => ['required', 'string', 'max:30'],
-            'methode_paiement' => ['required', 'in:wave,orange_money'],
+            'telephone' => ['nullable', 'string', 'max:30'],
+            'methode_paiement' => ['required', Rule::in(['dexpay'])],
+            'canal_paiement' => ['required', Rule::in(config('services.dexpay.channels', ['wave', 'orange_money', 'free_money', 'wizall', 'card']))],
             'type' => ['nullable', 'in:adhesion,cotisation'],
             'nombre_cotisations' => ['nullable', 'integer', 'min:1', 'max:12'],
             'idempotency_key' => ['nullable', 'string', 'max:120'],
@@ -31,17 +36,19 @@ class PaiementController extends Controller
         $result = $this->paiementService->initierPaiement(
             $request->user(),
             $validated['methode_paiement'],
-            $validated['telephone'],
+            (string) ($request->user()->telephone ?? ''),
             $validated['type'] ?? null,
             isset($validated['montant']) ? (int) $validated['montant'] : null,
             isset($validated['nombre_cotisations']) ? (int) $validated['nombre_cotisations'] : null,
-            $idempotencyKey !== '' ? $idempotencyKey : null
+            $idempotencyKey !== '' ? $idempotencyKey : null,
+            $validated['canal_paiement']
         );
 
         return response()->json([
             'message' => 'Paiement initie',
             'paiement' => $result['paiement'],
             'provider' => $result['provider'],
+            'checkout_url' => $result['checkout_url'] ?? null,
         ], ($result['is_replay'] ?? false) ? 200 : 201);
     }
 
@@ -50,7 +57,7 @@ class PaiementController extends Controller
         $validated = $request->validate([
             'type' => ['nullable', 'in:adhesion,cotisation'],
             'statut' => ['nullable', 'in:en_attente,succes,echoue'],
-            'methode_paiement' => ['nullable', 'in:wave,orange_money'],
+            'methode_paiement' => ['nullable', Rule::in(['wave', 'orange_money', 'dexpay'])],
             'date_debut' => ['nullable', 'date'],
             'date_fin' => ['nullable', 'date', 'after_or_equal:date_debut'],
             'include_repartition' => ['nullable', 'boolean'],
@@ -101,5 +108,130 @@ class PaiementController extends Controller
                 'total' => $paginator->total(),
             ],
         ]);
+    }
+
+    public function status(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'reference' => ['required', 'string', 'max:120'],
+        ]);
+
+        $reference = (string) $validated['reference'];
+        $user = $request->user();
+
+        $paiement = Paiement::query()
+            ->where('user_id', $user->id)
+            ->where('reference', $reference)
+            ->whereNull('cotisation_id')
+            ->first();
+
+        if ($paiement) {
+            return response()->json([
+                'status' => $paiement->statut,
+                'source' => 'paiement',
+                'paiement' => [
+                    'reference' => $paiement->reference,
+                    'type' => $paiement->type,
+                    'montant' => (int) $paiement->montant,
+                    'methode_paiement' => $paiement->methode_paiement,
+                    'canal_paiement' => $paiement->canal_paiement,
+                    'statut' => $paiement->statut,
+                    'failure_reason' => $paiement->failure_reason,
+                    'date_paiement' => optional($paiement->date_paiement)->toIso8601String(),
+                ],
+            ]);
+        }
+
+        $transaction = MobileMoneyTransaction::query()
+            ->where('user_id', $user->id)
+            ->where('reference', $reference)
+            ->first();
+
+        if ($transaction) {
+            return response()->json([
+                'status' => $transaction->statut,
+                'source' => 'transaction',
+                'paiement' => [
+                    'reference' => $transaction->reference,
+                    'type' => $transaction->type,
+                    'montant' => (int) $transaction->montant,
+                    'methode_paiement' => $transaction->methode_paiement,
+                    'canal_paiement' => $transaction->canal_paiement,
+                    'statut' => $transaction->statut,
+                    'failure_reason' => $transaction->failure_reason,
+                    'date_paiement' => null,
+                ],
+            ]);
+        }
+
+        throw ValidationException::withMessages([
+            'reference' => ['Paiement introuvable pour cette reference.'],
+        ]);
+    }
+
+    public function adhesionState(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $paiement = Paiement::query()
+            ->where('user_id', $user->id)
+            ->where('type', 'adhesion')
+            ->whereNull('cotisation_id')
+            ->latest()
+            ->first();
+
+        $transaction = MobileMoneyTransaction::query()
+            ->where('user_id', $user->id)
+            ->where('type', 'adhesion')
+            ->latest()
+            ->first();
+
+        $latest = collect([$paiement, $transaction])
+            ->filter()
+            ->sortByDesc(fn ($item) => $item->created_at)
+            ->first();
+
+        if (!$latest) {
+            return response()->json([
+                'has_payment' => false,
+                'status' => null,
+                'source' => null,
+                'paiement' => null,
+            ]);
+        }
+
+        return response()->json([
+            'has_payment' => true,
+            'status' => $latest->statut,
+            'source' => $latest instanceof Paiement ? 'paiement' : 'transaction',
+            'paiement' => [
+                'reference' => $latest->reference,
+                'type' => $latest->type,
+                'montant' => (int) $latest->montant,
+                'methode_paiement' => $latest->methode_paiement,
+                'canal_paiement' => $latest->canal_paiement,
+                'statut' => $latest->statut,
+                'failure_reason' => $latest->failure_reason,
+                'date_paiement' => $latest instanceof Paiement ? optional($latest->date_paiement)->toIso8601String() : null,
+                'created_at' => optional($latest->created_at)->toIso8601String(),
+            ],
+        ]);
+    }
+
+    public function previewCotisation(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'montant' => ['required', 'integer', 'min:100'],
+        ]);
+
+        if ($request->user()->statut !== 'actif') {
+            throw ValidationException::withMessages([
+                'user' => ['Le membre doit etre actif pour cotiser.'],
+            ]);
+        }
+
+        return response()->json(
+            $this->paiementService->previsualiserRepartition($request->user(), (int) $validated['montant'])
+        );
     }
 }

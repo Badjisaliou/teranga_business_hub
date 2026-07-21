@@ -10,28 +10,8 @@ use Illuminate\Validation\ValidationException;
 class AdminService
 {
     public function __construct(
-        private readonly CotisationService $cotisationService,
         private readonly NotificationService $notificationService,
     ) {
-    }
-
-    public function validerUtilisateur(User $admin, User $targetUser, ?string $description = null): User
-    {
-        $this->guardAdminTarget($targetUser);
-        $this->guardStatut($targetUser, ['en_attente'], 'Validation autorisee uniquement pour un compte en attente.');
-
-        $targetUser->statut = 'attente_adhesion';
-        $targetUser->save();
-        $this->cotisationService->creerEcheancierAnnuelDepuisMoisCourant($targetUser);
-        $this->notificationService->envoyerNotification(
-            $targetUser,
-            'Votre inscription a ete validee. Votre compte est maintenant en attente d adhesion (10000 FCFA).',
-            'paiement'
-        );
-
-        $this->logAction($admin->id, $targetUser->id, 'validation', $description);
-
-        return $targetUser->refresh();
     }
 
     public function bloquerUtilisateur(User $admin, User $targetUser, ?string $description = null): User
@@ -43,7 +23,7 @@ class AdminService
         $targetUser->save();
         $this->notificationService->envoyerNotification(
             $targetUser,
-            'Votre compte a ete bloque. Merci de contacter la structure Teranga Business Hub pour plus d informations.',
+            'Votre espace membre a ete bloque. Merci de contacter la structure Teranga Business Hub pour plus d informations.',
             'retard'
         );
 
@@ -52,42 +32,34 @@ class AdminService
         return $targetUser->refresh();
     }
 
-    public function rejeterUtilisateur(User $admin, User $targetUser, ?string $description = null): User
-    {
-        $this->guardAdminTarget($targetUser);
-        $this->guardStatut($targetUser, ['en_attente'], 'Rejet autorise uniquement pour un compte en attente.');
-
-        $targetUser->statut = 'rejete';
-        $targetUser->save();
-        $this->notificationService->envoyerNotification(
-            $targetUser,
-            'Votre inscription n a pas ete acceptee. Merci de contacter la structure Teranga Business Hub.',
-            'paiement'
-        );
-
-        $this->logAction($admin->id, $targetUser->id, 'rejet', $description);
-
-        return $targetUser->refresh();
-    }
-
     public function debloquerUtilisateur(User $admin, User $targetUser, ?string $description = null): User
     {
         $this->guardAdminTarget($targetUser);
-        $this->guardStatut($targetUser, ['bloque'], 'Deblocage autorise uniquement pour un compte bloque.');
+        $this->guardStatut($targetUser, ['bloque'], 'Deblocage autorise uniquement pour un membre bloque.');
 
-        $targetUser->statut = $targetUser->date_adhesion ? 'actif' : 'attente_adhesion';
+        $targetUser->statut = 'actif';
         $targetUser->save();
         $this->notificationService->envoyerNotification(
             $targetUser,
-            $targetUser->statut === 'actif'
-                ? 'Votre compte a ete debloque. Vous pouvez acceder de nouveau aux services.'
-                : 'Votre compte a ete debloque. Merci de regler les frais d adhesion pour activer votre espace membre.',
+            'Votre espace membre a ete debloque. Vous pouvez acceder de nouveau aux services.',
             'paiement'
         );
 
         $this->logAction($admin->id, $targetUser->id, 'deblocage', $description);
 
         return $targetUser->refresh();
+    }
+
+    public function journaliserLienResetPin(User $admin, User $targetUser, ?string $description = null): void
+    {
+        $this->guardAdminTarget($targetUser);
+
+        $this->logAction(
+            $admin->id,
+            $targetUser->id,
+            'pin_reset_link',
+            $description ?? 'Lien de reinitialisation PIN genere.'
+        );
     }
 
     private function logAction(int $adminId, int $targetUserId, string $action, ?string $description): void

@@ -20,13 +20,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'cni_recto')) {
-                $table->string('cni_recto')->nullable()->after('photo_profil');
-            }
-            if (!Schema::hasColumn('users', 'cni_verso')) {
-                $table->string('cni_verso')->nullable()->after('cni_recto');
-            }
-        });
+        // KYC document uploads are intentionally not restored in the refactored model.
     }
 };

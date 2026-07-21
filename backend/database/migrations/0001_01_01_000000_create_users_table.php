@@ -16,27 +16,17 @@ return new class extends Migration
             $table->string('matricule')->unique();
             $table->string('nom');
             $table->string('prenom');
-            $table->string('email')->unique();
+            $table->string('email')->nullable()->unique();
             $table->string('telephone')->nullable();
             $table->string('adresse')->nullable();
-            $table->string('password');
+            $table->string('password')->nullable();
             $table->enum('role', ['admin', 'membre'])->default('membre');
-            $table->enum('statut', ['en_attente', 'attente_adhesion', 'actif', 'bloque', 'rejete'])->default('en_attente');
-            $table->string('photo_profil')->nullable();
-            $table->string('cni_recto')->nullable();
-            $table->string('cni_verso')->nullable();
-            $table->enum('kyc_statut', ['incomplet', 'complet'])->default('incomplet');
+            $table->enum('statut', ['actif', 'bloque'])->default('actif');
             $table->dateTime('date_adhesion')->nullable();
             $table->dateTime('date_expiration')->nullable();
             $table->string('api_token', 80)->nullable()->unique();
             $table->rememberToken();
             $table->timestamps();
-        });
-
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
-            $table->string('token');
-            $table->timestamp('created_at')->nullable();
         });
 
         Schema::create('sessions', function (Blueprint $table) {
@@ -55,7 +45,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
     }
 };

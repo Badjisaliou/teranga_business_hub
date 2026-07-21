@@ -6,6 +6,8 @@ use App\Models\Cotisation;
 use App\Models\Paiement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CotisationController extends Controller
 {
@@ -34,6 +36,7 @@ class CotisationController extends Controller
                         'montant' => $paiement->montant,
                         'statut' => $paiement->statut,
                         'methode_paiement' => $paiement->methode_paiement,
+                        'canal_paiement' => $paiement->canal_paiement,
                         'date_paiement' => optional($paiement->date_paiement)->toISOString(),
                         'created_at' => optional($paiement->created_at)->toISOString(),
                     ];
@@ -41,7 +44,51 @@ class CotisationController extends Controller
             ];
         })->values();
 
-        return response()->json(['data' => $data]);
+        return response()->json([
+            'data' => $data,
+            'configuration' => [
+                'montant_mensuel' => $request->user()->cotisation_montant_mensuel,
+                'choix_requis' => $request->user()->cotisation_montant_mensuel === null,
+                'options' => [5000, 10000, 20000],
+            ],
+        ]);
+    }
+
+    public function choisirMontant(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'montant_mensuel' => ['required', 'integer', Rule::in([5000, 10000, 20000])],
+        ]);
+
+        $user = $request->user();
+        if ($user->cotisation_montant_mensuel !== null) {
+            throw ValidationException::withMessages([
+                'montant_mensuel' => ['Votre cotisation mensuelle est deja configuree.'],
+            ]);
+        }
+
+        $hasSuccessfulPayment = Paiement::query()
+            ->where('user_id', $user->id)
+            ->where('type', 'cotisation')
+            ->where('statut', 'succes')
+            ->exists();
+
+        if ($hasSuccessfulPayment) {
+            throw ValidationException::withMessages([
+                'montant_mensuel' => ['Le montant ne peut plus etre choisi apres un premier paiement.'],
+            ]);
+        }
+
+        $user->update(['cotisation_montant_mensuel' => (int) $validated['montant_mensuel']]);
+
+        return response()->json([
+            'message' => 'Cotisation mensuelle configuree.',
+            'configuration' => [
+                'montant_mensuel' => (int) $user->cotisation_montant_mensuel,
+                'choix_requis' => false,
+                'options' => [5000, 10000, 20000],
+            ],
+        ]);
     }
 
     public function transparence(): JsonResponse
@@ -77,6 +124,7 @@ class CotisationController extends Controller
                 'paiements.reference',
                 'paiements.montant',
                 'paiements.methode_paiement',
+                'paiements.canal_paiement',
                 'paiements.statut',
                 'paiements.date_paiement',
                 'paiements.created_at',
@@ -100,6 +148,7 @@ class CotisationController extends Controller
                             'reference' => $row->reference,
                             'montant' => (int) $row->montant,
                             'methode_paiement' => $row->methode_paiement,
+                            'canal_paiement' => $row->canal_paiement,
                             'statut' => $row->statut,
                             'date_paiement' => $row->date_paiement,
                             'created_at' => $row->created_at,

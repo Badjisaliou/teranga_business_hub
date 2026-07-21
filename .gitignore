@@ -4,6 +4,7 @@ Thumbs.db
 
 # Root
 node_modules/
+.local/
 
 # Backend
 backend/.env
@@ -18,9 +19,16 @@ backend/.phpunit.result.cache
 # Frontends
 frontend/.next/
 frontend/node_modules/
+frontend/.e2e/
 frontend/.env.local
 frontend/.env.production.local
+frontend/test-results/
+frontend/playwright-report/
 frontend-admin/.next/
 frontend-admin/node_modules/
+frontend-admin/.e2e/
 frontend-admin/.env.local
 frontend-admin/.env.production.local
+frontend-admin/test-results/
+frontend-admin/playwright-report/
+tmp/

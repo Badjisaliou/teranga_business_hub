@@ -125,4 +125,10 @@ return [
     */
     'api_token_ttl_minutes' => (int) env('API_TOKEN_TTL_MINUTES', 10080),
 
+    'member_cookie_name' => env('MEMBER_COOKIE_NAME', env('APP_ENV') === 'production' ? '__Host-tbh_member_session' : 'tbh_member_session'),
+    'admin_cookie_name' => env('ADMIN_COOKIE_NAME', env('APP_ENV') === 'production' ? '__Host-tbh_admin_session' : 'tbh_admin_session'),
+    'api_cookie_domain' => env('API_COOKIE_DOMAIN'),
+    'api_cookie_secure' => env('API_COOKIE_SECURE', env('APP_ENV') === 'production'),
+    'api_cookie_same_site' => env('API_COOKIE_SAME_SITE', env('APP_ENV') === 'production' ? 'none' : 'lax'),
+
 ];

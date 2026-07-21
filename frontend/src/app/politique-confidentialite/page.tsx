@@ -1,45 +1,20 @@
-import Link from "next/link";
+import PublicPage from "@/components/PublicPage";
+import { organization } from "@/lib/institution";
 
-const privacyItems = [
-  "Les informations renseignees dans l'application sont utilisees uniquement pour la gestion des membres, des adhesions, des cotisations et des services associes.",
-  "TERANGA BUSINESS HUB limite l'acces aux donnees aux personnes habilitees dans le cadre du fonctionnement de la structure.",
-  "Les donnees ne sont pas destinees a un usage commercial externe non lie aux services proposes par la plateforme.",
-  "L'utilisateur peut demander une mise a jour de ses informations en contactant la structure par les canaux officiels.",
+const sections = [
+  ["Responsable du traitement", `${organization.legal.legalName}, ${organization.legal.legalForm}, siège à ${organization.legal.address}. Contact : ${organization.emails.donnees}.`],
+  ["Données traitées", "Identité, date de naissance, coordonnées, matricule, adhésion, Carte SIRA, authentification, formule, paiements, cotisations, demandes de support et, lors d’une candidature, informations et documents relatifs au projet."],
+  ["Finalités", "Créer et sécuriser le compte, gérer l’adhésion et la Carte SIRA, suivre les cotisations et paiements, traiter les demandes, accompagner les projets, étudier les candidatures et prévenir la fraude."],
+  ["Destinataires", "L’accès est limité aux fonctions habilitées de la direction, de l’administration et finance, des opérations, du support et de la technique. Les prestataires nécessaires incluent DexPay, Vercel et Railway selon leurs rôles respectifs."],
+  ["Conservation", "Les données ordinaires sont conservées pendant la relation puis un an après le départ. Un dossier et un Business Plan refusés sont supprimés après trois mois ; une fiche minimale de traçabilité est conservée un an. Certaines pièces peuvent être archivées plus longtemps lorsqu’une obligation légale l’impose."],
+  ["Confidentialité des projets", "Les Business Plans et pièces de candidature ne sont pas rendus publics. Ils sont accessibles uniquement aux personnes habilitées pour la réception, l’accompagnement, l’évaluation, le contrôle ou la défense des droits."],
+  ["Communications", "Les messages indispensables au compte ou au service peuvent être envoyés sans consentement commercial. Les actualités et offres nécessitent un accord séparé, facultatif et révocable."],
+  ["Mesure d’audience", "Seul Vercel Analytics est retenu. Sa configuration doit respecter les exigences d’information et, lorsqu’il est requis, de consentement. Google Analytics et les outils publicitaires ne sont pas utilisés."],
+  ["Vos droits", `Vous pouvez demander l’accès, la rectification, la suppression ou exercer votre droit d’opposition dans les conditions légales en écrivant à ${organization.emails.donnees}. Une réclamation peut être adressée à ${organization.emails.reclamation}.`],
 ];
 
 export default function PrivacyPolicyPage() {
-  return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
-      <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 p-8 shadow-[0_24px_70px_rgba(15,23,42,0.1)] backdrop-blur sm:p-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--tbh-red)]">Confidentialité</p>
-        <h1 className="mt-3 text-3xl font-bold text-slate-950 sm:text-4xl">Politique de confidentialité</h1>
-        <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
-          TERANGA BUSINESS HUB veille à une utilisation responsable des informations collectées dans l’application.
-          Cette page présente les principes généraux appliqués à la protection des données des membres.
-        </p>
-
-        <div className="mt-8 space-y-4">
-          {privacyItems.map((item) => (
-            <article key={item} className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-5 text-sm leading-7 text-slate-700">
-              {item}
-            </article>
-          ))}
-        </div>
-
-        <p className="mt-8 text-sm leading-7 text-slate-600">
-          Cette politique constitue une base d’information dans l’application et pourra être complétée par une version
-          détaillée sur le futur site vitrine de la structure.
-        </p>
-
-        <div className="mt-8">
-          <Link
-            href="/"
-            className="inline-flex rounded-full border border-[color:var(--tbh-navy)]/20 bg-white px-6 py-3 text-sm font-semibold text-[color:var(--tbh-navy)] transition hover:bg-[color:var(--tbh-navy)] hover:text-white"
-          >
-            Retour à l’accueil
-          </Link>
-        </div>
-      </section>
-    </div>
-  );
+  return <PublicPage eyebrow="Protection des données" title="Politique de confidentialité" description="Principes appliqués aux données des visiteurs, candidats, membres et entrepreneurs."><Notice /> <div className="mt-7 grid gap-4 md:grid-cols-2">{sections.map(([title, text]) => <section key={title} className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="font-black text-slate-950">{title}</h2><p className="mt-3 text-sm leading-7 text-slate-600">{text}</p></section>)}</div></PublicPage>;
 }
+
+function Notice() { return <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-7 text-amber-950">Cette version présente les règles actuellement confirmées. Elle reste susceptible d’être complétée après les formalités auprès de la CDP et la validation juridique finale.</p>; }

@@ -56,8 +56,30 @@ return [
         ],
     ],
 
+    'dexpay' => [
+        'enabled' => env('DEXPAY_ENABLED', false),
+        'mode' => env('DEXPAY_MODE', 'sandbox'),
+        'auto_confirm_dev' => env('DEXPAY_AUTO_CONFIRM_DEV', false),
+        'public_key' => env('DEXPAY_PUBLIC_KEY', ''),
+        'secret_key' => env('DEXPAY_SECRET_KEY', ''),
+        'webhook_secret' => env('DEXPAY_WEBHOOK_SECRET', env('DEXPAY_SECRET_KEY', '')),
+        'signature_header' => env('DEXPAY_SIGNATURE_HEADER', 'X-Dexchange-Signature'),
+        'currency' => env('DEXPAY_CURRENCY', 'XOF'),
+        'country_iso' => env('DEXPAY_COUNTRY_ISO', 'SN'),
+        'webhook_url' => env('DEXPAY_WEBHOOK_URL', env('APP_URL').'/api/webhook/dexpay'),
+        'success_url' => env('DEXPAY_SUCCESS_URL', env('FRONTEND_URL').'/paiement/retour'),
+        'failure_url' => env('DEXPAY_FAILURE_URL', env('FRONTEND_URL').'/paiement/annule'),
+        'pending_expiration_hours' => env('DEXPAY_PENDING_EXPIRATION_HOURS', 24),
+        'channels' => ['wave', 'orange_money', 'free_money', 'wizall', 'card'],
+    ],
+
     'admin_portal' => [
         'registration_secret' => env('ADMIN_PORTAL_REGISTRATION_SECRET', ''),
+    ],
+
+    'adhesion' => [
+        'application_expiration_hours' => env('ADHESION_APPLICATION_EXPIRATION_HOURS', 24),
+        'abandoned_retention_days' => env('ADHESION_ABANDONED_RETENTION_DAYS', 30),
     ],
 
 ];

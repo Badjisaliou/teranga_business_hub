@@ -17,7 +17,7 @@ export default function Home() {
         <Card className="mx-auto w-full max-w-2xl">
           <div className="grid gap-3 sm:grid-cols-2">
             <Link href="/register" className="rounded-lg border border-[color:var(--tbh-border)] px-4 py-3 text-center font-semibold text-[color:var(--tbh-text-soft)] hover:text-white">
-              Inscrire un utilisateur
+              Inscrire un administrateur
             </Link>
             <Link href="/login" className="rounded-lg bg-[color:var(--tbh-red)] px-4 py-3 text-center font-semibold text-white hover:opacity-90">
               Connexion admin

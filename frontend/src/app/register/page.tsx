@@ -1,131 +1,156 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import PublicAuthLayout, { FeedbackMessage, formFieldClassName } from "@/components/PublicAuthLayout";
+import PinInput from "@/components/ui/PinInput";
 
-type RegisterResponse = {
+type AdhesionApplication = {
+  public_id: string;
+  statut: "draft" | "payment_pending" | "paid" | "failed" | "expired";
+  montant_adhesion: number;
+  payment_reference: string | null;
+  payment_channel: string | null;
+  failure_reason: string | null;
+  expires_at: string | null;
+};
+
+type AdhesionStartResponse = {
   message: string;
-  user: {
-    id: number;
-    nom: string;
-    prenom: string;
-    email: string;
-    statut: string;
-  };
+  application: AdhesionApplication;
 };
 
-type RegistrationCheckResponse = {
-  email: { valid_format: boolean; exists: boolean };
-  telephone: { valid_format: boolean; exists: boolean; normalized: string | null };
-  numero_cni: { valid_format: boolean; exists: boolean };
-  can_register: boolean;
+type AdhesionPaymentResponse = {
+  message: string;
+  application: AdhesionApplication;
+  checkout_url: string | null;
 };
+
+const adhesionStorageKey = "teranga_pending_adhesion";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [nom, setNom] = useState("");
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [civilite, setCivilite] = useState("M");
   const [prenom, setPrenom] = useState("");
-  const [email, setEmail] = useState("");
+  const [nom, setNom] = useState("");
+  const [dateNaissance, setDateNaissance] = useState("");
   const [telephone, setTelephone] = useState("");
+  const [email, setEmail] = useState("");
+  const [paysResidence, setPaysResidence] = useState("Senegal");
+  const [region, setRegion] = useState("");
+  const [departement, setDepartement] = useState("");
+  const [commune, setCommune] = useState("");
   const [numeroCni, setNumeroCni] = useState("");
-  const [adresse, setAdresse] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [pin, setPin] = useState("");
+  const [pinConfirmation, setPinConfirmation] = useState("");
+  const [conditionsAcceptees, setConditionsAcceptees] = useState(false);
+  const [canalPaiement, setCanalPaiement] = useState("wave");
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [checkMessage, setCheckMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  async function runPrecheck(): Promise<boolean> {
-    setCheckMessage(null);
-    setChecking(true);
+  const progress = useMemo(() => {
+    if (step === 1) return "Identite";
+    if (step === 2) return "Adresse et CNI";
+    return "Paiement";
+  }, [step]);
 
-    try {
-      const result = await apiRequest<RegistrationCheckResponse>("/api/register/check", {
-        method: "POST",
-        body: JSON.stringify({
-          email,
-          telephone,
-          numero_cni: numeroCni,
-        }),
-      });
+  function goNext() {
+    setError(null);
 
-      if (!result.email.valid_format) {
-        setError("Format email invalide.");
-        return false;
+    if (step === 1) {
+      if (!prenom || !nom || !dateNaissance || !telephone || !/^[0-9]{6}$/.test(pin)) {
+        setError("Veuillez renseigner votre identite, votre date de naissance et votre telephone WhatsApp.");
+        return;
       }
-      if (result.email.exists) {
-        setError("Cet email existe déjà.");
-        return false;
+      if (pin !== pinConfirmation) {
+        setError("Les deux codes PIN ne correspondent pas.");
+        return;
       }
-      if (!result.telephone.valid_format) {
-        setError("Numéro de téléphone Sénégal invalide.");
-        return false;
-      }
-      if (result.telephone.exists) {
-        setError("Ce numéro de téléphone existe déjà.");
-        return false;
-      }
-      if (!result.numero_cni.valid_format) {
-        setError("Numéro CNI invalide (13 chiffres attendus).");
-        return false;
-      }
-      if (result.numero_cni.exists) {
-        setError("Ce numéro CNI existe déjà.");
-        return false;
-      }
+      setStep(2);
+      return;
+    }
 
-      if (result.telephone.normalized) {
-        setTelephone(result.telephone.normalized);
+    if (step === 2) {
+      if (!paysResidence || !region || !departement || !commune || !numeroCni) {
+        setError("Veuillez completer votre adresse et votre numero CNI.");
+        return;
       }
-
-      setCheckMessage("Vérification OK : email, téléphone et CNI valides.");
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur de vérification.");
-      return false;
-    } finally {
-      setChecking(false);
+      if (!/^[0-9]{10,15}$/.test(numeroCni.replace(/\s+/g, ""))) {
+        setError("Le numero CNI doit contenir entre 10 et 15 chiffres.");
+        return;
+      }
+      setStep(3);
     }
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setCheckMessage(null);
+    setMessage(null);
 
-    if (password !== passwordConfirmation) {
-      setError("Les mots de passe ne correspondent pas.");
+    if (!conditionsAcceptees) {
+      setError("Veuillez accepter les conditions d'adhesion.");
       return;
     }
 
-    const ok = await runPrecheck();
-    if (!ok) {
+    if (dateNaissance > maximumAdultBirthDate()) {
+      setError("Vous devez avoir au moins 18 ans pour adhérer.");
+      setStep(1);
       return;
     }
 
     setLoading(true);
     try {
-      await apiRequest<RegisterResponse>("/api/register", {
+      const start = await apiRequest<AdhesionStartResponse>("/api/adhesion/start", {
         method: "POST",
         body: JSON.stringify({
-          nom,
+          civilite,
           prenom,
-          email,
+          nom,
+          date_naissance: dateNaissance,
           telephone,
+          email: email || null,
+          pays_residence: paysResidence,
+          region,
+          departement,
+          commune,
           numero_cni: numeroCni,
-          adresse: adresse || null,
-          password,
+          pin,
+          pin_confirmation: pinConfirmation,
+          conditions_acceptees: conditionsAcceptees,
         }),
       });
 
-      router.push("/register/success");
+      const payment = await apiRequest<AdhesionPaymentResponse>(`/api/adhesion/${start.application.public_id}/payment`, {
+        method: "POST",
+        body: JSON.stringify({
+          canal_paiement: canalPaiement,
+          idempotency_key: crypto.randomUUID(),
+        }),
+      });
+
+      window.localStorage.setItem(
+        adhesionStorageKey,
+        JSON.stringify({
+          public_id: payment.application.public_id,
+          reference: payment.application.payment_reference,
+          created_at: new Date().toISOString(),
+        }),
+      );
+
+      if (payment.checkout_url) {
+        window.location.href = payment.checkout_url;
+        return;
+      }
+
+      router.push(`/register/success?application=${encodeURIComponent(payment.application.public_id)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue");
+      setError(err instanceof Error ? err.message : "Inscription impossible.");
     } finally {
       setLoading(false);
     }
@@ -133,126 +158,123 @@ export default function RegisterPage() {
 
   return (
     <PublicAuthLayout
-      eyebrow="Inscription"
-      title="Rejoignez une communauté plus accessible"
-      description="La nouvelle présentation donne plus de confiance à l'inscription tout en conservant le même parcours de validation métier."
+      eyebrow="Adhesion"
+      title="Inscription membre"
+      description="Remplissez vos informations, puis payez l'adhesion pour recevoir votre matricule."
+      variant="process"
       imageSrc="/hero-flyer-2.jpeg"
-      imageAlt="Visuel d'inscription Teranga Business Hub"
+      imageAlt="Adhesion Teranga Business Hub"
       points={[
-        "Inscription simple avec vérification préalable des informations.",
-        "Validation administrative avant activation du compte.",
-        "Présentation plus moderne pour rassurer les nouveaux membres.",
+        "Inscription par etapes avec telephone WhatsApp obligatoire.",
+        "Paiement adhesion de 10 000 FCFA via DexPay.",
+        "Votre code PIN est choisi directement pendant l'inscription.",
       ]}
-      footerLinks={[{ href: "/login", label: "J'ai déjà un compte" }]}
+      footerLinks={[{ href: "/login", label: "J'ai deja un matricule" }]}
     >
-      <h2 className="text-3xl font-bold text-slate-950">Inscription membre</h2>
-      <p className="mt-2 text-sm leading-7 text-slate-600">
-        Remplissez vos informations pour lancer votre demande d’adhésion.
-      </p>
+      <div className="mb-5">
+        <p className="text-sm font-semibold text-slate-500">Etape {step}/3</p>
+        <h2 className="mt-1 text-xl font-bold text-slate-950">{progress}</h2>
+      </div>
 
-      <form onSubmit={onSubmit} className="mt-8 space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <input
-            type="text"
-            value={prenom}
-            onChange={(e) => setPrenom(e.target.value)}
-            placeholder="Prénom"
-            className={formFieldClassName}
-            required
-          />
-          <input
-            type="text"
-            value={nom}
-            onChange={(e) => setNom(e.target.value)}
-            placeholder="Nom"
-            className={formFieldClassName}
-            required
-          />
-        </div>
+      <div className="mb-6 grid grid-cols-3 gap-2">
+        {[1, 2, 3].map((item) => (
+          <div key={item} className={`h-2 rounded-full ${item <= step ? "bg-[color:var(--tbh-red)]" : "bg-slate-200"}`} />
+        ))}
+      </div>
 
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          className={formFieldClassName}
-          required
-        />
-        <input
-          type="text"
-          value={telephone}
-          onChange={(e) => setTelephone(e.target.value)}
-          placeholder="Téléphone"
-          className={formFieldClassName}
-          required
-        />
-        <input
-          type="text"
-          value={numeroCni}
-          onChange={(e) => setNumeroCni(e.target.value)}
-          placeholder="Numéro CNI"
-          className={formFieldClassName}
-          required
-        />
-        <input
-          type="text"
-          value={adresse}
-          onChange={(e) => setAdresse(e.target.value)}
-          placeholder="Adresse (optionnel)"
-          className={formFieldClassName}
-        />
+      <form onSubmit={onSubmit} className="space-y-4">
+        {step === 1 ? (
+          <>
+            <select value={civilite} onChange={(event) => setCivilite(event.target.value)} className={formFieldClassName} required>
+              <option value="M">Monsieur</option>
+              <option value="Mme">Madame</option>
+              <option value="Mlle">Mademoiselle</option>
+            </select>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <input type="text" value={prenom} onChange={(event) => setPrenom(event.target.value)} placeholder="Prenom" className={formFieldClassName} required />
+              <input type="text" value={nom} onChange={(event) => setNom(event.target.value)} placeholder="Nom" className={formFieldClassName} required />
+            </div>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Date de naissance — adhésion réservée aux personnes de 18 ans ou plus</span>
+              <input type="date" value={dateNaissance} onChange={(event) => setDateNaissance(event.target.value)} max={maximumAdultBirthDate()} className={formFieldClassName} required />
+            </label>
+            <input type="text" value={telephone} onChange={(event) => setTelephone(event.target.value)} placeholder="Telephone WhatsApp" className={formFieldClassName} required />
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email (optionnel)" className={formFieldClassName} />
+            <PinInput value={pin} onChange={setPin} label="Choisissez votre code PIN" autoComplete="new-password" />
+            <PinInput value={pinConfirmation} onChange={setPinConfirmation} label="Confirmez votre code PIN" autoComplete="new-password" />
+          </>
+        ) : null}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Mot de passe"
-            className={formFieldClassName}
-            required
-          />
-          <input
-            type="password"
-            value={passwordConfirmation}
-            onChange={(e) => setPasswordConfirmation(e.target.value)}
-            placeholder="Confirmer mot de passe"
-            className={formFieldClassName}
-            required
-          />
-        </div>
+        {step === 2 ? (
+          <>
+            <input type="text" value={paysResidence} onChange={(event) => setPaysResidence(event.target.value)} placeholder="Pays de residence" className={formFieldClassName} required />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <input type="text" value={region} onChange={(event) => setRegion(event.target.value)} placeholder="Region" className={formFieldClassName} required />
+              <input type="text" value={departement} onChange={(event) => setDepartement(event.target.value)} placeholder="Departement" className={formFieldClassName} required />
+            </div>
+            <input type="text" value={commune} onChange={(event) => setCommune(event.target.value)} placeholder="Commune" className={formFieldClassName} required />
+            <input type="text" value={numeroCni} onChange={(event) => setNumeroCni(event.target.value)} placeholder="Numero carte CNI (10 a 15 chiffres)" className={formFieldClassName} required />
+          </>
+        ) : null}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              setError(null);
-              void runPrecheck();
-            }}
-            disabled={checking || loading}
-            className="rounded-2xl px-5 py-3"
-          >
-            {checking ? "Vérification..." : "Vérifier mes infos"}
-          </Button>
-          <span className="text-xs leading-6 text-slate-500">
-            Email, téléphone et CNI sont contrôlés avant l’enregistrement.
-          </span>
-        </div>
+        {step === 3 ? (
+          <>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-950">Frais d'adhesion</p>
+              <p className="mt-1 text-3xl font-black text-[color:var(--tbh-navy)]">10 000 FCFA</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Votre matricule sera disponible apres confirmation DexPay.</p>
+            </div>
+
+            <select value={canalPaiement} onChange={(event) => setCanalPaiement(event.target.value)} className={formFieldClassName} required>
+              <option value="wave">Wave</option>
+              <option value="orange_money">Orange Money</option>
+              <option value="free_money">Free Money</option>
+              <option value="wizall">Wizall</option>
+              <option value="card">Carte bancaire</option>
+            </select>
+
+            <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
+              <input type="checkbox" checked={conditionsAcceptees} onChange={(event) => setConditionsAcceptees(event.target.checked)} className="mt-1 h-4 w-4" />
+              <span>
+                J’ai au moins 18 ans, je confirme l’exactitude des informations fournies et j’accepte les <Link href="/conditions-utilisation" target="_blank" className="font-bold text-[color:var(--tbh-red)] underline">conditions d’utilisation</Link> ainsi que le <Link href="/reglement-programme" target="_blank" className="font-bold text-[color:var(--tbh-red)] underline">règlement du programme</Link>. J’ai pris connaissance de la <Link href="/politique-confidentialite" target="_blank" className="font-bold text-[color:var(--tbh-red)] underline">politique de confidentialité</Link>. Je comprends que l’adhésion et les cotisations ne garantissent aucun financement.
+              </span>
+            </label>
+          </>
+        ) : null}
 
         {error ? <FeedbackMessage tone="error">{error}</FeedbackMessage> : null}
-        {checkMessage ? <FeedbackMessage tone="success">{checkMessage}</FeedbackMessage> : null}
+        {message ? <FeedbackMessage tone="success">{message}</FeedbackMessage> : null}
 
-        <Button type="submit" disabled={loading} className="w-full rounded-2xl py-3 text-sm">
-          {loading ? "Création..." : "Créer mon compte"}
-        </Button>
+        <div className="grid gap-3 pt-2 sm:grid-cols-2">
+          {step > 1 ? (
+            <Button type="button" variant="secondary" onClick={() => setStep((current) => (current === 3 ? 2 : 1))} disabled={loading} className="w-full rounded-xl px-5 py-3">
+              Retour
+            </Button>
+          ) : null}
+          {step < 3 ? (
+            <Button type="button" onClick={goNext} className="w-full rounded-xl px-5 py-3">
+              Continuer
+            </Button>
+          ) : (
+            <Button type="submit" disabled={loading} className="w-full rounded-xl px-5 py-3">
+              {loading ? "Redirection DexPay..." : "Payer et finaliser"}
+            </Button>
+          )}
+        </div>
       </form>
 
       <p className="mt-6 text-sm text-slate-600">
-        Vous avez déjà un compte ?{" "}
+        Vous avez deja un compte ?{" "}
         <Link href="/login" className="font-semibold text-[color:var(--tbh-red)]">
           Se connecter
         </Link>
       </p>
     </PublicAuthLayout>
   );
+}
+
+function maximumAdultBirthDate() {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - 18);
+  return date.toISOString().slice(0, 10);
 }

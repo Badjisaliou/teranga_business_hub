@@ -1,0 +1,6 @@
+import Link from "next/link";
+import { contributionPlans, formatFcfa } from "@/lib/institution";
+
+export default function ContributionPlans() {
+  return <div className="grid gap-5 lg:grid-cols-3">{contributionPlans.map((plan) => <article key={plan.amount} className="flex flex-col rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-black uppercase tracking-[0.16em] text-[color:var(--tbh-red)]">{plan.label}</p><p className="mt-4 text-3xl font-black text-slate-950">{formatFcfa(plan.amount)}</p><p className="text-sm text-slate-500">par mois</p><ul className="mt-5 flex-1 space-y-3 text-sm text-slate-700">{plan.benefits.map((benefit) => <li key={benefit} className="flex gap-2"><span className="text-emerald-600">✓</span>{benefit}</li>)}</ul><div className="mt-5 rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">Financement envisagé</p><p className="mt-1 font-black text-[color:var(--tbh-navy)]">{plan.range}</p></div><p className="mt-4 text-xs leading-5 text-slate-500">Sous réserve d’éligibilité, d’approbation du projet et de disponibilité du fonds.</p><Link href="/register" className="mt-5 rounded-full bg-[color:var(--tbh-red)] px-5 py-3 text-center text-sm font-bold text-white">Choisir après mon adhésion</Link></article>)}</div>;
+}

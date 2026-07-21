@@ -61,6 +61,12 @@ class BusinessSettingsService
                 ]);
             }
 
+            if ($key === 'cotisation_montant_mensuel' && !in_array($value, [5000, 10000, 20000], true)) {
+                throw ValidationException::withMessages([
+                    'settings' => ['La cotisation mensuelle doit etre 5000, 10000 ou 20000 FCFA.'],
+                ]);
+            }
+
             $validated[$key] = $value;
         }
 
@@ -81,6 +87,7 @@ class BusinessSettingsService
     {
         return [
             'cotisation_montant_mensuel' => 20000,
+            'payment_warning_unsold_months_threshold' => 1,
             'auto_block_unsold_months_threshold' => 2,
         ];
     }

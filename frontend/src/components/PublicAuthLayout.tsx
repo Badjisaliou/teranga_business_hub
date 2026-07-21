@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ReactNode } from "react";
+import AppIcon, { AppIconName } from "@/components/ui/AppIcon";
 
 type ActionLink = {
   href: string;
@@ -12,6 +13,7 @@ type PublicAuthLayoutProps = {
   title: string;
   description: string;
   children: ReactNode;
+  variant?: "marketing" | "process";
   imageSrc?: string;
   imageAlt?: string;
   badge?: string;
@@ -21,7 +23,7 @@ type PublicAuthLayoutProps = {
 };
 
 export const formFieldClassName =
-  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[color:var(--tbh-red)] focus:ring-4 focus:ring-[color:var(--tbh-red)]/10";
+  "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[color:var(--tbh-red)] focus:ring-4 focus:ring-[color:var(--tbh-red)]/10";
 
 export function FeedbackMessage({
   tone,
@@ -35,8 +37,20 @@ export function FeedbackMessage({
     success: "border-emerald-200 bg-emerald-50 text-emerald-700",
     info: "border-blue-200 bg-blue-50 text-[color:var(--tbh-navy)]",
   }[tone];
+  const icons: Record<typeof tone, AppIconName> = {
+    error: "alert",
+    success: "check",
+    info: "notification",
+  };
 
-  return <p className={`rounded-2xl border px-4 py-3 text-sm ${tones}`}>{children}</p>;
+  return (
+    <div className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${tones}`}>
+      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80">
+        <AppIcon name={icons[tone]} />
+      </span>
+      <div className="min-w-0 flex-1 leading-6">{children}</div>
+    </div>
+  );
 }
 
 export default function PublicAuthLayout({
@@ -44,6 +58,7 @@ export default function PublicAuthLayout({
   title,
   description,
   children,
+  variant = "marketing",
   imageSrc = "/hero-flyer-1.jpeg",
   imageAlt = "Teranga Business Hub",
   badge = "Teranga Business Hub",
@@ -51,6 +66,44 @@ export default function PublicAuthLayout({
   accent = "navy",
   footerLinks = [],
 }: PublicAuthLayoutProps) {
+  if (variant === "process") {
+    return (
+      <main className="min-h-screen bg-white px-4 py-5 text-slate-950 sm:px-6 sm:py-8">
+        <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] w-full max-w-md flex-col">
+          <header className="mb-7 flex items-center justify-between gap-4">
+            <Link href="/" className="flex min-w-0 items-center gap-3">
+              <Image src="/tbh-logo.png" alt="Logo Teranga Business Hub" width={44} height={44} priority className="h-11 w-11 rounded-lg bg-white object-contain" />
+              <span className="min-w-0">
+                <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--tbh-red)]">TBH</span>
+                <span className="block truncate text-sm font-bold text-[color:var(--tbh-navy)]">Teranga Business Hub</span>
+              </span>
+            </Link>
+          </header>
+
+          <section className="flex-1">
+            <div className="mb-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--tbh-red)]">{eyebrow}</p>
+              <h1 className="mt-2 text-2xl font-black leading-tight text-slate-950">{title}</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+            </div>
+
+            {children}
+          </section>
+
+          {footerLinks.length > 0 ? (
+            <footer className="mt-8 flex flex-wrap gap-4 border-t border-slate-200 pt-5 text-sm">
+              {footerLinks.map((link) => (
+                <Link key={link.href} href={link.href} className="font-semibold text-[color:var(--tbh-red)] transition hover:opacity-80">
+                  {link.label}
+                </Link>
+              ))}
+            </footer>
+          ) : null}
+        </div>
+      </main>
+    );
+  }
+
   const accentClass =
     accent === "red"
       ? "from-[color:var(--tbh-red)] via-[#f26a78] to-[color:var(--tbh-navy)]"
@@ -79,8 +132,11 @@ export default function PublicAuthLayout({
             {points.length > 0 ? (
               <div className="grid gap-3">
                 {points.map((point) => (
-                  <div key={point} className="rounded-2xl border border-white/12 bg-white/8 px-4 py-4 text-sm leading-7 text-blue-50">
-                    {point}
+                  <div key={point} className="flex items-start gap-3 rounded-2xl border border-white/12 bg-white/8 px-4 py-4 text-sm leading-7 text-blue-50">
+                    <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/14 text-white">
+                      <AppIcon name="check" className="h-4 w-4" />
+                    </span>
+                    <span>{point}</span>
                   </div>
                 ))}
               </div>

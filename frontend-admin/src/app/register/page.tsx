@@ -6,6 +6,10 @@ import { apiRequest } from "@/lib/api";
 import { useAdminGuard } from "@/lib/use-admin-guard";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import AdminGuardLoading from "@/components/AdminGuardLoading";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+
+const ADMIN_CREATION_CONFIRMATION = "CREER ADMIN";
 
 type RegisterResponse = {
   message: string;
@@ -13,7 +17,7 @@ type RegisterResponse = {
     id: number;
     nom: string;
     prenom: string;
-    email: string;
+    email: string | null;
     statut: string;
     role: string;
   };
@@ -36,16 +40,15 @@ export default function RegisterUserPage() {
   const [adresse, setAdresse] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [adminSecret, setAdminSecret] = useState("");
-  const [showAdminSecret, setShowAdminSecret] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [checkMessage, setCheckMessage] = useState<string | null>(null);
+  const [confirmCreateOpen, setConfirmCreateOpen] = useState(false);
 
   if (!ready) {
-    return <div className="min-h-screen bg-white" />;
+    return <AdminGuardLoading />;
   }
 
   async function runPrecheck(): Promise<boolean> {
@@ -56,13 +59,13 @@ export default function RegisterUserPage() {
       const result = await apiRequest<RegistrationCheckResponse>("/api/register/check", {
         method: "POST",
         body: JSON.stringify({
-          email,
+          email: email || null,
           telephone,
           numero_cni: numeroCni,
         }),
       });
 
-      if (!result.email.valid_format) {
+      if (email && !result.email.valid_format) {
         setError("Format email invalide.");
         return false;
       }
@@ -71,15 +74,15 @@ export default function RegisterUserPage() {
         return false;
       }
       if (!result.telephone.valid_format) {
-        setError("Numero telephone Senegal invalide.");
+        setError("Numéro de téléphone Sénégal invalide.");
         return false;
       }
       if (result.telephone.exists) {
-        setError("Ce numero de telephone existe deja.");
+        setError("Ce numéro de téléphone existe déjà.");
         return false;
       }
       if (!result.numero_cni.valid_format) {
-        setError("Numero CNI invalide (13 chiffres attendus).");
+        setError("Numéro CNI invalide (13 chiffres attendus).");
         return false;
       }
       if (result.numero_cni.exists) {
@@ -91,7 +94,7 @@ export default function RegisterUserPage() {
         setTelephone(result.telephone.normalized);
       }
 
-      setCheckMessage("Verification OK: email, telephone et CNI valides.");
+      setCheckMessage("Vérification OK : contact, téléphone et CNI valides.");
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de verification.");
@@ -117,24 +120,30 @@ export default function RegisterUserPage() {
       return;
     }
 
+    setConfirmCreateOpen(true);
+  }
+
+  async function createAdmin() {
     setLoading(true);
+    setError(null);
+    setSuccess(null);
     try {
-      const result = await apiRequest<RegisterResponse>("/api/register", {
+      const result = await apiRequest<RegisterResponse>("/api/admin/register", {
         method: "POST",
         body: JSON.stringify({
           nom,
           prenom,
-          email,
+          email: email || null,
           telephone,
           numero_cni: numeroCni,
           adresse: adresse || null,
           password,
-          registration_source: "admin_portal",
-          admin_registration_secret: adminSecret,
+          confirmation_phrase: ADMIN_CREATION_CONFIRMATION,
         }),
       });
 
-      setSuccess(`Utilisateur créé (${result.user.email}) avec rôle ${result.user.role} et statut ${result.user.statut}.`);
+      setConfirmCreateOpen(false);
+      setSuccess(`Administrateur cree (${result.user.email ?? telephone}) avec role ${result.user.role} et statut ${result.user.statut}.`);
       setNom("");
       setPrenom("");
       setEmail("");
@@ -143,7 +152,6 @@ export default function RegisterUserPage() {
       setAdresse("");
       setPassword("");
       setPasswordConfirmation("");
-      setAdminSecret("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur inconnue");
     } finally {
@@ -154,8 +162,12 @@ export default function RegisterUserPage() {
   return (
     <div className="min-h-screen bg-white px-6 py-16 text-slate-900">
       <Card className="mx-auto w-full max-w-xl">
-        <h1 className="mb-2 text-2xl font-semibold">Inscription Utilisateur</h1>
-        <p className="mb-6 text-sm text-slate-600">Créer rapidement un nouveau compte membre depuis l&apos;app admin.</p>
+        <h1 className="mb-2 text-2xl font-semibold">Creation administrateur</h1>
+        <p className="mb-6 text-sm text-slate-600">Creer un compte admin actif pour gerer Teranga Business Hub.</p>
+
+        <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          Cet ecran cree uniquement un administrateur actif. Votre session admin est requise.
+        </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -176,31 +188,12 @@ export default function RegisterUserPage() {
               required
             />
           </div>
-          <div className="relative">
-            <input
-              type={showAdminSecret ? "text" : "password"}
-              value={adminSecret}
-              onChange={(e) => setAdminSecret(e.target.value)}
-              placeholder="Clé secrète admin portal"
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-24"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowAdminSecret((prev) => !prev)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-[color:var(--tbh-border)] px-2 py-1 text-xs text-slate-700"
-            >
-              {showAdminSecret ? "Masquer" : "Afficher"}
-            </button>
-          </div>
-
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
+            placeholder="Email (optionnel)"
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-            required
           />
           <input
             type="text"
@@ -263,7 +256,7 @@ export default function RegisterUserPage() {
           </Button>
 
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Création..." : "Créer utilisateur"}
+            {loading ? "Creation..." : "Creer administrateur"}
           </Button>
         </form>
 
@@ -274,6 +267,25 @@ export default function RegisterUserPage() {
           </Link>
         </p>
       </Card>
+      <ConfirmDialog
+        open={confirmCreateOpen}
+        title="Creer cet administrateur ?"
+        description="Ce compte aura immediatement les droits d'administration sur Teranga Business Hub."
+        confirmLabel="Creer administrateur"
+        tone="danger"
+        loading={loading}
+        requiredConfirmationText={ADMIN_CREATION_CONFIRMATION}
+        onCancel={() => setConfirmCreateOpen(false)}
+        onConfirm={() => void createAdmin()}
+        details={
+          <div className="space-y-1">
+            <p className="font-semibold text-slate-950">
+              {prenom} {nom}
+            </p>
+            <p>{email || telephone}</p>
+          </div>
+        }
+      />
     </div>
   );
 }

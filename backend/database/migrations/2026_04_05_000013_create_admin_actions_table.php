@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('admin_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('cible_user_id')->constrained('users')->cascadeOnDelete();
-            $table->enum('action', ['validation', 'rejet', 'blocage', 'deblocage']);
+            $table->enum('action', ['blocage', 'deblocage', 'relance_paiement', 'pin_reset_link']);
             $table->text('description')->nullable();
             $table->dateTime('date_action');
             $table->timestamps();
@@ -24,4 +24,3 @@ return new class extends Migration
         Schema::dropIfExists('admin_actions');
     }
 };
-

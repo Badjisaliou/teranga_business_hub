@@ -41,6 +41,26 @@ body::before {
   background-size: min(42vw, 420px);
 }
 
+@media (max-width: 767px) {
+  body {
+    background:
+      linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  }
+
+  body::before {
+    opacity: 0.025;
+    background-position: center 18%;
+    background-size: 72vw;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  body::before {
+    background-position: 88% 12%;
+    background-size: 34vw;
+  }
+}
+
 a,
 button,
 summary,

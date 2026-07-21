@@ -15,8 +15,9 @@ return new class extends Migration
             $table->enum('type', ['adhesion', 'cotisation']);
             $table->unsignedBigInteger('montant');
             $table->string('reference')->unique();
-            $table->enum('methode_paiement', ['wave', 'orange_money']);
+            $table->enum('methode_paiement', ['wave', 'orange_money', 'paydunya', 'dexpay']);
             $table->enum('statut', ['en_attente', 'succes', 'echoue'])->default('en_attente');
+            $table->string('failure_reason')->nullable();
             $table->dateTime('date_paiement')->nullable();
             $table->timestamps();
         });

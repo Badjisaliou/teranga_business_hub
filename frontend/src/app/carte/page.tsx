@@ -5,28 +5,27 @@ import Button from "@/components/ui/Button";
 import { apiRequest, getAuthToken } from "@/lib/api";
 import { useStatusGuard } from "@/lib/use-status-guard";
 import MemberPageShell, { MemberEmptyState, MemberMessage } from "@/components/MemberPageShell";
+import SessionGuardLoading from "@/components/SessionGuardLoading";
 
 type MemberCard = {
   matricule: string;
   nom: string;
   prenom: string;
-  email: string;
+  email: string | null;
   telephone: string | null;
   adresse: string | null;
   numero_cni: string | null;
   statut: string;
-  photo_profil: string | null;
-  photo_profil_url?: string | null;
   date_adhesion: string | null;
   date_expiration: string | null;
+  card_issued_at?: string | null;
+  verification_url?: string | null;
   is_valid: boolean;
 };
 
 type MemberCardResponse = {
   card: MemberCard;
 };
-
-type CardSide = "front" | "back";
 
 const CARD_WIDTH = 1011;
 const CARD_HEIGHT = 638;
@@ -37,10 +36,8 @@ export default function CarteMembrePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [assetsError, setAssetsError] = useState<string | null>(null);
-  const [downloadingSide, setDownloadingSide] = useState<CardSide | null>(null);
-  const [activeSide, setActiveSide] = useState<CardSide>("front");
-  const frontCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (!ready) {
@@ -69,39 +66,36 @@ export default function CarteMembrePage() {
   }, [ready]);
 
   useEffect(() => {
-    if (!card || !frontCanvasRef.current || !backCanvasRef.current) {
+    if (!card || !canvasRef.current) {
       return;
     }
 
     let cancelled = false;
+    const currentCard = card;
 
     async function renderCard() {
       try {
         setAssetsError(null);
-
         const logoUrl = await toDataUrl("/tbh-logo.png");
-        const photoUrl = card.photo_profil_url ? await toDataUrl(card.photo_profil_url) : null;
+        const qrUrl = currentCard.verification_url ? qrCodeUrl(currentCard.verification_url, 240) : null;
         if (cancelled) {
           return;
         }
 
-        const [logoImage, photoImage] = await Promise.all([
+        const [logoImage, qrImage] = await Promise.all([
           loadImage(logoUrl),
-          photoUrl ? loadImage(photoUrl) : Promise.resolve(null),
+          qrUrl ? loadImage(qrUrl).catch(() => null) : Promise.resolve(null),
         ]);
         if (cancelled) {
           return;
         }
 
-        const frontContext = frontCanvasRef.current?.getContext("2d");
-        const backContext = backCanvasRef.current?.getContext("2d");
-
-        if (!frontContext || !backContext) {
+        const context = canvasRef.current?.getContext("2d");
+        if (!context) {
           throw new Error("Canvas non disponible.");
         }
 
-        drawFrontCard(frontContext, card, logoImage, photoImage);
-        drawBackCard(backContext, card, logoImage);
+        drawMemberCard(context, currentCard, logoImage, qrImage);
       } catch (err) {
         if (!cancelled) {
           setAssetsError(err instanceof Error ? err.message : "Impossible de preparer la carte.");
@@ -125,16 +119,16 @@ export default function CarteMembrePage() {
   }, [card]);
 
   if (!ready) {
-    return <div className="min-h-screen bg-white" />;
+    return <SessionGuardLoading />;
   }
 
-  async function downloadCard(side: CardSide) {
-    const canvas = side === "front" ? frontCanvasRef.current : backCanvasRef.current;
+  async function downloadCard() {
+    const canvas = canvasRef.current;
     if (!canvas) {
       return;
     }
 
-    setDownloadingSide(side);
+    setDownloading(true);
     try {
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
       if (!blob) {
@@ -144,7 +138,7 @@ export default function CarteMembrePage() {
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = objectUrl;
-      link.download = `${cardFileBase}-${side === "front" ? "recto" : "verso"}.png`;
+      link.download = `${cardFileBase}-recto.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -152,17 +146,15 @@ export default function CarteMembrePage() {
     } catch (err) {
       setAssetsError(err instanceof Error ? err.message : "Telechargement impossible.");
     } finally {
-      setDownloadingSide(null);
+      setDownloading(false);
     }
   }
 
   return (
     <MemberPageShell
-      eyebrow={"Carte de membre"}
-      title={"Carte virtuelle premium"}
-      description={
-        "Votre carte adopte un format fixe type identite, avec recto et verso, logo, photo de profil et telechargement en image."
-      }
+      eyebrow="Carte de membre"
+      title="Carte virtuelle"
+      description="Votre Carte SIRA reprend l’identité visuelle officielle de Teranga Business Hub et intègre un QR code de vérification."
     >
       {loading ? <MemberEmptyState>Chargement...</MemberEmptyState> : null}
       {error ? <MemberMessage tone="error">{error}</MemberMessage> : null}
@@ -171,49 +163,28 @@ export default function CarteMembrePage() {
       {card ? (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" className="rounded-2xl px-5 py-3" onClick={() => void downloadCard("front")} disabled={downloadingSide !== null}>
-              {downloadingSide === "front" ? "Preparation du recto..." : "Telecharger le recto"}
+            <Button type="button" className="rounded-2xl px-5 py-3" onClick={() => void downloadCard()} disabled={downloading}>
+              {downloading ? "Preparation du recto..." : "Telecharger la carte"}
             </Button>
-            <Button type="button" variant="secondary" className="rounded-2xl px-5 py-3" onClick={() => void downloadCard("back")} disabled={downloadingSide !== null}>
-              {downloadingSide === "back" ? "Preparation du verso..." : "Telecharger le verso"}
-            </Button>
-            <p className="text-sm text-slate-600">Format ID-1 fixe, adapte a une carte de membre standard.</p>
+            <p className="text-sm text-slate-600">Format ID-1 fixe, recto uniquement.</p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveSide("front")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                activeSide === "front" ? "bg-[color:var(--tbh-red)] text-white" : "bg-white text-slate-700 border border-slate-200"
-              }`}
-            >
-              Recto
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSide("back")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                activeSide === "back" ? "bg-[color:var(--tbh-red)] text-white" : "bg-white text-slate-700 border border-slate-200"
-              }`}
-            >
-              Verso
-            </button>
-          </div>
+          {card.verification_url ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">Verification publique</p>
+              <a href={card.verification_url} target="_blank" rel="noreferrer" className="mt-1 block break-all text-[color:var(--tbh-red)] hover:underline">
+                {card.verification_url}
+              </a>
+            </div>
+          ) : null}
 
           <div className="overflow-x-auto rounded-[2rem] border border-slate-200 bg-white/90 p-4 shadow-sm">
             <div className="mx-auto w-full max-w-[860px]">
               <canvas
-                ref={frontCanvasRef}
+                ref={canvasRef}
                 width={CARD_WIDTH}
                 height={CARD_HEIGHT}
-                className={`${activeSide === "front" ? "block" : "hidden"} h-auto w-full rounded-[1.6rem] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.18)]`}
-              />
-              <canvas
-                ref={backCanvasRef}
-                width={CARD_WIDTH}
-                height={CARD_HEIGHT}
-                className={`${activeSide === "back" ? "block" : "hidden"} h-auto w-full rounded-[1.6rem] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.18)]`}
+                className="h-auto w-full rounded-[1.6rem] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.18)]"
               />
             </div>
           </div>
@@ -223,262 +194,151 @@ export default function CarteMembrePage() {
   );
 }
 
-function drawFrontCard(
+function drawMemberCard(
   context: CanvasRenderingContext2D,
   card: MemberCard,
   logoImage: HTMLImageElement,
-  photoImage: HTMLImageElement | null,
+  qrImage: HTMLImageElement | null,
 ) {
   drawBaseBackground(context);
-  const issuedAt = new Date().toLocaleDateString("fr-FR");
+  const issuedAt = formatDate(card.card_issued_at ?? null) || new Date().toLocaleDateString("fr-FR");
 
-  context.drawImage(logoImage, 58, 56, 88, 88);
-  context.fillStyle = "#ffffff";
-  context.font = "700 22px Arial";
-  context.fillText("TERANGA BUSINESS HUB", 164, 82);
-  context.fillStyle = "#dbeafe";
-  context.font = "700 16px Arial";
-  context.fillText("CARTE DE MEMBRE", 164, 114);
+  context.globalAlpha = 0.065;
+  context.drawImage(logoImage, 410, 100, 480, 480);
+  context.globalAlpha = 1;
 
   context.fillStyle = "#ffffff";
-  context.font = "900 40px Arial";
-  context.fillText(`${card.prenom} ${card.nom}`.trim(), 58, 208);
+  context.beginPath();
+  context.arc(128, 118, 72, 0, Math.PI * 2);
+  context.fill();
+  context.drawImage(logoImage, 66, 56, 124, 124);
+  context.fillStyle = "#d7192d";
+  context.fillRect(220, 55, 4, 132);
+  context.fillStyle = "#ffffff";
+  context.font = "900 36px Arial";
+  context.fillText("TERANGA", 250, 104);
+  context.font = "800 25px Arial";
+  context.fillText("Business Hub", 250, 139);
+  context.font = "500 14px Arial";
+  context.fillText("Ensemble, développons l'avenir.", 250, 169);
 
-  context.fillStyle = "#dbeafe";
-  context.font = "600 18px Arial";
-  context.fillText(`Matricule : ${card.matricule}`, 58, 244);
+  context.textAlign = "right";
+  context.font = "700 17px Arial";
+  context.fillText("CARTE VIRTUELLE SIRA", CARD_WIDTH - 56, 72);
+  drawContactless(context, CARD_WIDTH - 88, 108);
+  context.textAlign = "left";
 
   const statusLabel = card.is_valid ? "VALIDE" : "EXPIREE";
   context.fillStyle = card.is_valid ? "#9bf2a8" : "#fecdd3";
-  roundRect(context, 58, 266, 156, 42, 21);
+  roundRect(context, CARD_WIDTH - 214, 174, 148, 38, 19);
   context.fill();
   context.fillStyle = "#0f172a";
-  context.font = "700 18px Arial";
-  context.fillText(statusLabel, 95, 293);
+  context.font = "800 17px Arial";
+  context.fillText(statusLabel, CARD_WIDTH - 170, 199);
 
-  const photoX = CARD_WIDTH - 280;
-  const photoY = 60;
-  const photoW = 188;
-  const photoH = 230;
-  context.fillStyle = "rgba(255,255,255,0.92)";
-  roundRect(context, photoX - 12, photoY - 12, photoW + 24, photoH + 24, 28);
-  context.fill();
-
-  if (photoImage) {
-    drawCoverImage(context, photoImage, photoX, photoY, photoW, photoH, 24);
-  } else {
-    context.fillStyle = "#dbeafe";
-    roundRect(context, photoX, photoY, photoW, photoH, 24);
-    context.fill();
-    context.fillStyle = "#35547c";
-    context.font = "700 18px Arial";
-    context.fillText("Photo", photoX + 66, photoY + 104);
-    context.fillText("non fournie", photoX + 34, photoY + 132);
-  }
-
-  context.fillStyle = "#f8fafc";
-  context.font = "700 18px Arial";
-  context.fillText("IDENTIFICATION MEMBRE", 58, 348);
-
-  const leftFields = [
-    ["Email", card.email],
-    ["Telephone", card.telephone ?? "-"],
-    ["Adresse", card.adresse ?? "-"],
-  ];
-
-  const rightFields = [
-    ["Numero CNI", card.numero_cni ?? "-"],
-    ["Date adhesion", formatDate(card.date_adhesion)],
-    ["Expiration", formatDate(card.date_expiration)],
-  ];
-
-  drawFieldsColumn(context, leftFields, 58, 370, 420);
-  drawFieldsColumn(context, rightFields, 510, 370, 420);
-
-  drawSignatureBlock(context, 710, 564, issuedAt);
-
-  context.fillStyle = "rgba(255,255,255,0.86)";
-  context.font = "600 13px Arial";
-  context.fillText("Carte de membre virtuelle - usage interne TERANGA BUSINESS HUB", 58, CARD_HEIGHT - 38);
-}
-
-function drawBackCard(context: CanvasRenderingContext2D, card: MemberCard, logoImage: HTMLImageElement) {
-  drawBaseBackground(context);
-  const verificationSeed = `${card.matricule}|${card.email}|${card.numero_cni ?? ""}|${card.date_expiration ?? ""}`;
-
-  context.globalAlpha = 0.08;
-  context.drawImage(logoImage, CARD_WIDTH - 320, CARD_HEIGHT - 310, 240, 240);
-  context.globalAlpha = 1;
-
-  context.drawImage(logoImage, 58, 56, 72, 72);
+  context.fillStyle = "#e32438";
+  context.font = "700 14px Arial";
+  context.fillText("TITULAIRE", 58, 270);
   context.fillStyle = "#ffffff";
-  context.font = "800 24px Arial";
-  context.fillText("TERANGA BUSINESS HUB", 148, 84);
-  context.fillStyle = "#dbeafe";
-  context.font = "600 15px Arial";
-  context.fillText("VERSO - INFORMATIONS MEMBRE", 148, 112);
+  context.font = "900 36px Arial";
+  context.fillText(truncate(`${card.prenom} ${card.nom}`.trim().toUpperCase(), 27), 58, 310);
 
-  context.fillStyle = "rgba(255,255,255,0.1)";
-  roundRect(context, 58, 150, CARD_WIDTH - 116, 186, 28);
-  context.fill();
-
+  context.strokeStyle = "rgba(255,255,255,0.9)";
+  context.lineWidth = 2;
+  roundRect(context, 58, 330, 330, 42, 21);
+  context.stroke();
   context.fillStyle = "#ffffff";
-  context.font = "700 18px Arial";
-  context.fillText("Informations generales", 84, 188);
-
-  const infoRows = [
-    ["Nom complet", `${card.prenom} ${card.nom}`.trim()],
-    ["Numero de membre", card.matricule],
-    ["Statut du compte", humanizeStatus(card.statut)],
-    ["Validite de la carte", card.is_valid ? "Carte valide" : "Carte a renouveler"],
-    ["Telephone", card.telephone ?? "-"],
-    ["Email", card.email],
-  ];
-
-  let rowY = 226;
-  for (const [label, value] of infoRows) {
-    context.fillStyle = "#dbeafe";
-    context.font = "600 14px Arial";
-    context.fillText(label, 84, rowY);
-    context.fillStyle = "#ffffff";
-    context.font = "700 18px Arial";
-    context.fillText(truncate(value, 56), 290, rowY);
-    rowY += 28;
-  }
-
-  context.fillStyle = "rgba(255,255,255,0.1)";
-  roundRect(context, 58, 364, CARD_WIDTH - 116, 178, 28);
-  context.fill();
-
-  context.fillStyle = "#ffffff";
-  context.font = "700 18px Arial";
-  context.fillText("Mentions", 84, 402);
-  context.fillStyle = "#dbeafe";
-  context.font = "600 15px Arial";
-  wrapText(
-    context,
-    "Cette carte identifie le membre au sein de TERANGA BUSINESS HUB. Elle reste personnelle et ne peut etre utilisee qu'en lien avec les activites et services de la structure.",
-    84,
-    436,
-    CARD_WIDTH - 168,
-    26,
-  );
-
-  context.fillStyle = "#fecdd3";
   context.font = "700 15px Arial";
-  context.fillText("En cas de perte, merci de contacter la structure.", 84, 510);
+  context.fillText(`MEMBRE · ${card.matricule}`, 80, 357);
 
-  context.fillStyle = "rgba(255,255,255,0.1)";
-  roundRect(context, 736, 382, 170, 128, 22);
+  const fields: Array<[string, string]> = [
+    ["Numero CNI", card.numero_cni ?? "-"],
+    ["Telephone", card.telephone ?? "-"],
+    ["Adhesion", formatDate(card.date_adhesion)],
+    ["Expiration", formatDate(card.date_expiration)],
+    ["Statut", humanizeStatus(card.statut)],
+    ["Emission", issuedAt],
+  ];
+  drawFieldsGrid(context, fields, 58, 395);
+
+  context.fillStyle = "rgba(255,255,255,0.12)";
+  roundRect(context, 750, 286, 200, 248, 28);
   context.fill();
   context.fillStyle = "#ffffff";
-  context.font = "700 16px Arial";
-  context.fillText("Code de verification", 752, 410);
-  drawVerificationMatrix(context, verificationSeed, 754, 424, 9, 12);
+  context.font = "700 17px Arial";
+  context.fillText("VÉRIFICATION QR", 774, 320);
+  if (qrImage) {
+    context.fillStyle = "#ffffff";
+    roundRect(context, 779, 340, 142, 142, 14);
+    context.fill();
+    context.drawImage(qrImage, 787, 348, 126, 126);
+  } else {
+    drawVerificationMatrix(context, card.verification_url ?? card.matricule, 779, 340, 9, 15);
+  }
   context.fillStyle = "#dbeafe";
   context.font = "600 12px Arial";
-  context.fillText(card.matricule, 754, 534);
+  context.fillText(truncate(card.matricule, 24), 779, 510);
 
   context.fillStyle = "rgba(255,255,255,0.86)";
   context.font = "600 13px Arial";
-  context.fillText("Carte de membre - format numerique standard", 58, CARD_HEIGHT - 38);
+  context.fillText("SÉCURISÉE  •  VIRTUELLE  •  IMMÉDIATE", 58, CARD_HEIGHT - 32);
 }
 
 function drawBaseBackground(context: CanvasRenderingContext2D) {
   context.clearRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
   const background = context.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
-  background.addColorStop(0, "#10284d");
-  background.addColorStop(0.5, "#173a6d");
-  background.addColorStop(1, "#224f91");
+  background.addColorStop(0, "#061b3e");
+  background.addColorStop(0.55, "#08254e");
+  background.addColorStop(1, "#061630");
   context.fillStyle = background;
   roundRect(context, 0, 0, CARD_WIDTH, CARD_HEIGHT, 36);
   context.fill();
 
-  const glow = context.createRadialGradient(140, 90, 0, 140, 90, 260);
-  glow.addColorStop(0, "rgba(239,74,92,0.35)");
-  glow.addColorStop(1, "rgba(239,74,92,0)");
-  context.fillStyle = glow;
-  context.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-
-  context.fillStyle = "rgba(255,255,255,0.08)";
-  roundRect(context, 36, 36, CARD_WIDTH - 72, CARD_HEIGHT - 72, 28);
+  context.fillStyle = "#bd001c";
+  context.beginPath();
+  context.moveTo(390, CARD_HEIGHT);
+  context.bezierCurveTo(700, 620, 890, 500, CARD_WIDTH, 260);
+  context.lineTo(CARD_WIDTH, CARD_HEIGHT);
+  context.closePath();
   context.fill();
+  context.strokeStyle = "rgba(255,255,255,0.85)";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(390, CARD_HEIGHT - 2);
+  context.bezierCurveTo(700, 618, 890, 498, CARD_WIDTH, 258);
+  context.stroke();
 }
 
-function drawFieldsColumn(
-  context: CanvasRenderingContext2D,
-  fields: Array<[string, string]>,
-  x: number,
-  y: number,
-  width: number,
-) {
-  let offsetY = y;
-  for (const [label, value] of fields) {
-    context.fillStyle = "rgba(255,255,255,0.12)";
-    roundRect(context, x, offsetY, width, 54, 18);
-    context.fill();
-
-    context.fillStyle = "#d0defa";
-    context.font = "600 13px Arial";
-    context.fillText(label.toUpperCase(), x + 18, offsetY + 20);
-
-    context.fillStyle = "#ffffff";
-    context.font = "700 18px Arial";
-    context.fillText(truncate(value, 34), x + 18, offsetY + 40);
-    offsetY += 66;
+function drawContactless(context: CanvasRenderingContext2D, x: number, y: number) {
+  context.strokeStyle = "#ffffff";
+  context.lineWidth = 5;
+  context.lineCap = "round";
+  for (let radius = 12; radius <= 34; radius += 11) {
+    context.beginPath();
+    context.arc(x, y, radius, -Math.PI / 3, Math.PI / 3);
+    context.stroke();
   }
 }
 
-function drawCoverImage(
-  context: CanvasRenderingContext2D,
-  image: HTMLImageElement,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-) {
-  context.save();
-  roundRect(context, x, y, width, height, radius);
-  context.clip();
+function drawFieldsGrid(context: CanvasRenderingContext2D, fields: Array<[string, string]>, x: number, y: number) {
+  for (let index = 0; index < fields.length; index += 1) {
+    const [label, value] = fields[index];
+    const col = index % 2;
+    const row = Math.floor(index / 2);
+    const fieldX = x + col * 326;
+    const fieldY = y + row * 76;
 
-  const scale = Math.max(width / image.width, height / image.height);
-  const scaledWidth = image.width * scale;
-  const scaledHeight = image.height * scale;
-  const dx = x + (width - scaledWidth) / 2;
-  const dy = y + (height - scaledHeight) / 2;
-
-  context.drawImage(image, dx, dy, scaledWidth, scaledHeight);
-  context.restore();
-}
-
-function drawSignatureBlock(context: CanvasRenderingContext2D, x: number, y: number, issuedAt: string) {
-  context.fillStyle = "rgba(255,255,255,0.12)";
-  roundRect(context, x - 8, y - 40, 238, 92, 20);
-  context.fill();
-
-  context.fillStyle = "#dbeafe";
-  context.font = "600 12px Arial";
-  context.fillText(`Date d'emission : ${issuedAt}`, x + 4, y - 14);
-
-  context.strokeStyle = "rgba(255,255,255,0.75)";
-  context.lineWidth = 2;
-  context.beginPath();
-  context.moveTo(x + 4, y + 6);
-  context.bezierCurveTo(x + 34, y - 26, x + 62, y + 28, x + 90, y - 4);
-  context.bezierCurveTo(x + 110, y - 24, x + 138, y + 18, x + 172, y - 10);
-  context.bezierCurveTo(x + 188, y - 22, x + 202, y - 6, x + 220, y - 2);
-  context.stroke();
-
-  context.strokeStyle = "rgba(239,74,92,0.85)";
-  context.lineWidth = 3;
-  context.beginPath();
-  context.ellipse(x + 174, y + 6, 42, 24, -0.18, 0, Math.PI * 2);
-  context.stroke();
-  context.font = "700 11px Arial";
-  context.fillStyle = "#ffffff";
-  context.fillText("Cachet TBH", x + 145, y + 10);
+    context.fillStyle = "rgba(255,255,255,0.12)";
+    roundRect(context, fieldX, fieldY, 292, 56, 18);
+    context.fill();
+    context.fillStyle = "#d0defa";
+    context.font = "600 12px Arial";
+    context.fillText(label.toUpperCase(), fieldX + 18, fieldY + 21);
+    context.fillStyle = "#ffffff";
+    context.font = "700 17px Arial";
+    context.fillText(truncate(value, 25), fieldX + 18, fieldY + 43);
+  }
 }
 
 function drawVerificationMatrix(
@@ -524,34 +384,6 @@ function createVerificationBits(seed: string, size: number) {
   return bits;
 }
 
-function wrapText(
-  context: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  lineHeight: number,
-) {
-  const words = text.split(" ");
-  let line = "";
-  let offsetY = y;
-
-  for (const word of words) {
-    const nextLine = line ? `${line} ${word}` : word;
-    if (context.measureText(nextLine).width > maxWidth) {
-      context.fillText(line, x, offsetY);
-      line = word;
-      offsetY += lineHeight;
-    } else {
-      line = nextLine;
-    }
-  }
-
-  if (line) {
-    context.fillText(line, x, offsetY);
-  }
-}
-
 function roundRect(
   context: CanvasRenderingContext2D,
   x: number,
@@ -576,6 +408,7 @@ function roundRect(
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return await new Promise((resolve, reject) => {
     const image = new Image();
+    image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("Impossible de charger une image de la carte."));
     image.src = src;
@@ -615,9 +448,6 @@ function humanizeStatus(status: string) {
   const labels: Record<string, string> = {
     actif: "Actif",
     bloque: "Bloque",
-    en_attente: "En attente",
-    attente_adhesion: "Attente adhesion",
-    rejete: "Rejete",
   };
 
   return labels[status] ?? status;
@@ -634,4 +464,8 @@ function slugify(value: string) {
     .replace(/[^a-zA-Z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
+}
+
+function qrCodeUrl(value: string, size: number) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=8&data=${encodeURIComponent(value)}`;
 }

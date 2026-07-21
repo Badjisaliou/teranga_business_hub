@@ -5,11 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { apiRequest, clearAuthSession, getAuthToken } from "@/lib/api";
 
 const LINKS: Array<{ href: string; label: string }> = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard", label: "Accueil" },
   { href: "/paiements/historique", label: "Historique paiements" },
   { href: "/cotisations", label: "Cotisations" },
   { href: "/cotisations/paiement", label: "Paiement cotisation" },
-  { href: "/transparence", label: "Transparence" },
   { href: "/carte", label: "Carte membre" },
   { href: "/profil", label: "Mon profil" },
 ];
@@ -55,7 +54,7 @@ export default function ActiveMemberNav() {
           onClick={() => void logout()}
           className="ml-auto rounded-md border border-rose-700 px-3 py-2 text-sm font-semibold text-rose-300"
         >
-          Deconnexion
+          Déconnexion
         </button>
       </div>
     </nav>

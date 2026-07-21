@@ -3,11 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\AdminAction;
+use App\Models\AdhesionApplication;
 use App\Models\Cotisation;
 use App\Models\Notification;
 use App\Models\Paiement;
 use App\Models\User;
-use App\Services\BusinessSettingsService;
+use App\Services\CotisationRiskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 class DashboardController extends Controller
 {
     public function __construct(
-        private readonly BusinessSettingsService $businessSettingsService,
+        private readonly CotisationRiskService $cotisationRiskService,
     ) {
     }
 
@@ -45,44 +46,7 @@ class DashboardController extends Controller
 
     public function adminDashboard(): JsonResponse
     {
-        $currentMonth = (int) now()->format('n');
-        $currentYear = (int) now()->format('Y');
-        $threshold = $this->businessSettingsService->getInt('auto_block_unsold_months_threshold');
-
-        $membresABloquerDefautPaiement = User::query()
-            ->where('statut', 'actif')
-            ->with(['cotisations' => function ($query) use ($currentMonth, $currentYear) {
-                $query->whereIn('statut', ['non_paye', 'partiel', 'en_retard'])
-                    ->where(function ($q) use ($currentMonth, $currentYear) {
-                        $q->where('annee', '<', $currentYear)
-                            ->orWhere(function ($q2) use ($currentMonth, $currentYear) {
-                                $q2->where('annee', '=', $currentYear)
-                                    ->where('mois', '<', $currentMonth);
-                            });
-                    })
-                    ->orderBy('annee')
-                    ->orderBy('mois');
-            }])
-            ->get()
-            ->map(function (User $user) use ($threshold) {
-                $impayes = $user->cotisations;
-                if ($impayes->count() < $threshold) {
-                    return null;
-                }
-
-                return [
-                    'id' => $user->id,
-                    'matricule' => $user->matricule,
-                    'nom' => $user->nom,
-                    'prenom' => $user->prenom,
-                    'email' => $user->email,
-                    'telephone' => $user->telephone,
-                    'mois_non_soldes' => $impayes->count(),
-                    'details' => $impayes->map(fn (Cotisation $c) => sprintf('%02d/%d', $c->mois, $c->annee))->values(),
-                ];
-            })
-            ->filter()
-            ->values();
+        $membresABloquerDefautPaiement = $this->cotisationRiskService->membersAtRisk();
 
         return response()->json([
             'kpis' => [
@@ -106,7 +70,11 @@ class DashboardController extends Controller
                 ->latest()
                 ->take(20)
                 ->get(),
-            'membres_en_attente' => User::whereIn('statut', ['en_attente', 'attente_adhesion'])->latest()->take(20)->get(),
+            'adhesion_applications_non_finalisees' => AdhesionApplication::query()
+                ->whereIn('statut', ['draft', 'payment_pending', 'failed'])
+                ->latest()
+                ->take(20)
+                ->get(),
             'membres_a_bloquer_defaut_paiement' => $membresABloquerDefautPaiement,
         ]);
     }

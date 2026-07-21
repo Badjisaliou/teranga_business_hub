@@ -37,6 +37,6 @@ class ContactValidationService
 
         $normalized = preg_replace('/\s+/', '', $input) ?? '';
 
-        return (bool) preg_match('/^[0-9]{13}$/', $normalized);
+        return (bool) preg_match('/^[0-9]{10,15}$/', $normalized);
     }
 }

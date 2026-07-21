@@ -1,0 +1,107 @@
+RAPPORT D'ACTIVITE HEBDOMADAIRE
+Projet : Teranga Business Hub
+Période : du 13 au 17 juillet 2026
+Date de rédaction : 17 juillet 2026
+Rédigé par : Oumar Ba Badji
+
+1. OBJECTIF DE LA SEMAINE
+
+Les travaux de la semaine ont principalement porté sur la consolidation fonctionnelle et technique de la plateforme Teranga Business Hub. Les priorités ont concerné la modernisation du parcours d'adhésion, la sécurisation de l'authentification par code PIN, la fiabilisation des paiements mobile money via DexPay, l'amélioration des outils d'administration et l'enrichissement du site vitrine.
+
+2. ACTIVITES REALISEES
+
+2.1. Refonte du parcours d'adhésion et de gestion des membres
+
+- Mise en place d'un nouveau système de demandes d'adhésion distinct des comptes membres actifs.
+- Création des composants backend nécessaires : contrôleur, modèle, service, routes API et migrations de base de données.
+- Simplification des statuts utilisateurs afin de conserver des états finaux plus clairs et plus faciles à administrer.
+- Suppression progressive des anciens écrans et champs devenus inutiles, notamment les parcours de validation et de rejet hérités.
+- Amélioration des formulaires d'inscription, des pages de confirmation et des règles de redirection selon le statut du membre.
+- Ajout d'outils permettant à l'administration de consulter et de gérer les membres de manière plus détaillée.
+
+2.2. Sécurisation de l'authentification et du code PIN
+
+- Renforcement de la connexion par code PIN pour les membres.
+- Ajout de champs et de migrations dédiés à la sécurité, à la réinitialisation et au suivi du PIN.
+- Mise en place d'un parcours de réinitialisation du PIN par lien sécurisé.
+- Correction de contraintes de base de données liées aux actions administratives de réinitialisation.
+- Suppression d'anciens mécanismes de mot de passe et de vérification téléphonique qui n'étaient plus adaptés au nouveau parcours.
+- Renforcement des middlewares d'authentification, de contrôle des membres actifs et de vérification de l'origine des requêtes.
+
+2.3. Paiements, cotisations et intégration DexPay
+
+- Consolidation du service de paiement et de la gestion des transactions mobile money.
+- Amélioration du traitement des webhooks DexPay afin de mieux gérer les confirmations, les erreurs et les doublons.
+- Ajout d'un mécanisme de récupération des paiements lorsque le retour du prestataire est incomplet ou interrompu.
+- Création des pages de retour et d'annulation de paiement côté membre.
+- Amélioration des écrans de cotisations, du paiement d'une échéance et de l'historique des paiements.
+- Ajout du suivi du canal de paiement et des motifs d'échec dans la base de données.
+- Retrait de l'ancien mode PayDunya afin d'aligner l'application sur le dispositif de paiement actuellement retenu.
+- Ajout d'outils d'analyse du risque lié aux cotisations et d'actions de rappel administratif.
+
+2.4. Evolution de l'espace d'administration
+
+- Refonte et enrichissement du tableau de bord administrateur.
+- Amélioration de la liste des utilisateurs et création d'une vue détaillée par membre.
+- Mise en place d'un espace Finance pour le suivi administratif des paiements.
+- Ajout d'un service d'export CSV des paiements et amélioration du téléchargement des données.
+- Enrichissement des paramètres métier, notamment pour la gestion du montant mensuel des cotisations.
+- Ajout de boîtes de confirmation et d'états de chargement afin de sécuriser les actions sensibles.
+- Renforcement des gardes d'accès et des redirections propres à l'interface d'administration.
+
+2.5. Amélioration de l'espace membre et du site vitrine
+
+- Réorganisation de la navigation, de l'en-tête, du pied de page et des structures communes de pages.
+- Amélioration du tableau de bord membre, du profil, des notifications, de la carte de membre et du support.
+- Création ou enrichissement de pages publiques : Qui sommes-nous, Comment ça marche, Formules, Accompagnement, Formations, Equipe, Gouvernance, FAQ, Contact et Candidature.
+- Création de composants réutilisables pour les formules de cotisation, les moyens de paiement, les icônes, les réseaux sociaux et les actions membres.
+- Ajout de contenus institutionnels et juridiques : mentions légales, politique de confidentialité, conditions d'utilisation et règlement du programme.
+- Préparation et intégration de nouveaux visuels pour l'identité et la communication du projet.
+
+2.6. Base de données, performance et maintenance
+
+- Création de plusieurs migrations pour accompagner la réforme des membres, des adhésions, des PIN et des paiements.
+- Ajout d'index sur les requêtes métier importantes afin d'améliorer les performances.
+- Mise à jour des modèles, factories et données d'initialisation pour les aligner sur le nouveau schéma.
+- Ajout d'un service de conservation et de nettoyage des données.
+- Mise à jour des commandes de maintenance et d'exploitation disponibles côté backend.
+
+2.7. Tests, qualité et préparation à la production
+
+- Mise en place d'une configuration de tests backend et ajout de tests automatisés.
+- Ajout de scénarios de tests de bout en bout avec Playwright pour les interfaces membre et administrateur.
+- Mise à jour des configurations ESLint et des dépendances des deux applications frontend.
+- Préparation du déploiement backend avec Docker, Railway et Nixpacks.
+- Mise à jour de la documentation de déploiement et des variables d'environnement d'exemple.
+- Rédaction de documents de diagnostic et de correction concernant DexPay, la réinitialisation du PIN et la base de données de production.
+
+3. RESULTATS OBTENUS
+
+- Parcours d'adhésion plus simple et mieux séparé de la gestion des membres actifs.
+- Authentification par PIN mieux sécurisée et procédure de récupération plus fiable.
+- Paiements mobile money mieux suivis, avec une meilleure capacité de reprise après interruption.
+- Visibilité accrue pour l'administration sur les membres, les cotisations et les transactions.
+- Expérience utilisateur harmonisée entre le site public, l'espace membre et l'espace administrateur.
+- Couverture fonctionnelle du site vitrine élargie avec de nouvelles pages institutionnelles et juridiques.
+- Socle technique mieux préparé pour les tests, la maintenance et le déploiement en production.
+
+4. DIFFICULTES ET POINTS DE VIGILANCE
+
+- La fiabilisation des webhooks et des retours de paiement nécessite des contrôles rigoureux afin d'éviter les doubles traitements.
+- La réforme du modèle membre implique plusieurs migrations successives qui doivent être exécutées et vérifiées avec précaution en production.
+- Les changements réalisés sont encore majoritairement présents dans l'espace de travail et devront être regroupés en commits cohérents pour assurer une bonne traçabilité.
+- Les parcours critiques, notamment adhésion, connexion, réinitialisation du PIN et paiement, doivent faire l'objet d'une validation complète avant la mise en production.
+
+5. PROCHAINES ETAPES RECOMMANDEES
+
+- Finaliser les tests automatisés et exécuter une recette fonctionnelle complète.
+- Vérifier les migrations sur une copie de la base de données de production.
+- Tester les paiements DexPay de bout en bout, y compris les cas d'annulation, d'échec et de retour tardif du webhook.
+- Valider les nouveaux contenus publics et juridiques avec les responsables concernés.
+- Corriger les éventuelles anomalies relevées lors de la recette.
+- Organiser les changements en commits thématiques, puis préparer une version de mise en production.
+- Mettre à jour la checklist de livraison et réaliser une sauvegarde avant déploiement.
+
+6. SYNTHESE
+
+La semaine a été consacrée à une évolution importante de Teranga Business Hub. Les travaux ont permis de renforcer les fonctions centrales de la plateforme : adhésion, gestion des membres, authentification, cotisations, paiements et administration. En parallèle, le site public a été enrichi et le projet a été mieux préparé pour les tests et le déploiement. La prochaine priorité consiste à valider l'ensemble des parcours critiques et à sécuriser la livraison en production.

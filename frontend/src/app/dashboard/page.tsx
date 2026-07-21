@@ -6,12 +6,18 @@ import { apiRequest, getAuthToken, MemberNotification } from "@/lib/api";
 import Card from "@/components/ui/Card";
 import { useStatusGuard } from "@/lib/use-status-guard";
 import MemberPageShell, { MemberEmptyState, MemberMessage } from "@/components/MemberPageShell";
+import AppIcon, { AppIconName } from "@/components/ui/AppIcon";
+import ListenButton from "@/components/ListenButton";
+import SimpleMemberActions from "@/components/SimpleMemberActions";
+import SessionGuardLoading from "@/components/SessionGuardLoading";
 
 type DashboardResponse = {
   user: {
+    matricule?: string;
     nom: string;
     prenom: string;
-    email: string;
+    email: string | null;
+    telephone?: string | null;
     statut: string;
     role: string;
   };
@@ -25,13 +31,26 @@ type DashboardResponse = {
 };
 
 const shortcuts = [
-  { href: "/cotisations", label: "Mes cotisations" },
-  { href: "/cotisations/paiement", label: "Payer une cotisation" },
-  { href: "/paiements/historique", label: "Historique paiements" },
-  { href: "/transparence", label: "Transparence" },
-  { href: "/carte", label: "Carte membre" },
-  { href: "/profil", label: "Mon profil" },
-];
+  { href: "/cotisations", label: "Mes cotisations", icon: "calendar" },
+  { href: "/cotisations/paiement", label: "Payer une cotisation", icon: "wallet" },
+  { href: "/paiements/historique", label: "Historique paiements", icon: "history" },
+  { href: "/carte", label: "Carte membre", icon: "card" },
+  { href: "/profil", label: "Mon profil", icon: "profile" },
+] satisfies Array<{ href: string; label: string; icon: AppIconName }>;
+
+const notificationIcons: Record<MemberNotification["type"], AppIconName> = {
+  paiement: "money",
+  retard: "alert",
+  profil_incomplet: "profile",
+  expiration: "calendar",
+};
+
+const notificationIconTone: Record<MemberNotification["type"], string> = {
+  paiement: "bg-emerald-100 text-emerald-700",
+  retard: "bg-amber-100 text-amber-700",
+  profil_incomplet: "bg-blue-100 text-[color:var(--tbh-navy)]",
+  expiration: "bg-rose-100 text-rose-700",
+};
 
 export default function DashboardPage() {
   const { ready } = useStatusGuard({ allowedStatuts: ["actif"] });
@@ -62,13 +81,13 @@ export default function DashboardPage() {
   }, [ready]);
 
   if (!ready) {
-    return <div className="min-h-screen bg-white" />;
+    return <SessionGuardLoading />;
   }
 
   return (
     <MemberPageShell
       eyebrow="Espace membre"
-      title="Dashboard utilisateur"
+      title="Tableau de bord membre"
       description="Retrouvez en un coup d'oeil vos indicateurs, vos services principaux et l'etat general de votre espace TERANGA BUSINESS HUB."
       aside={
         data ? (
@@ -77,7 +96,8 @@ export default function DashboardPage() {
             <p className="mt-2 text-lg font-bold">
               {data.user.prenom} {data.user.nom}
             </p>
-            <p className="text-sm text-blue-50/80">{data.user.email}</p>
+            <p className="text-sm text-blue-50/80">{data.user.matricule ?? "Matricule non renseigne"}</p>
+            <p className="text-sm text-blue-50/70">{data.user.telephone ?? data.user.email ?? "Contact non renseigne"}</p>
           </div>
         ) : null
       }
@@ -87,10 +107,44 @@ export default function DashboardPage() {
       {data ? (
         <>
           <div className="grid gap-4 md:grid-cols-3">
-            <StatCard label="Paiements succes" value={String(data.stats.total_paiements_succes)} accent="red" />
-            <StatCard label="Cotisations a jour" value={String(data.stats.cotisations_a_jour)} accent="navy" />
-            <StatCard label="Cotisations non soldees" value={String(data.stats.cotisations_non_soldees)} accent="amber" />
+            <StatCard label="Paiements reussis" value={String(data.stats.total_paiements_succes)} accent="red" icon="money" />
+            <StatCard label="Cotisations a jour" value={String(data.stats.cotisations_a_jour)} accent="navy" icon="check" />
+            <StatCard label="Cotisations non soldees" value={String(data.stats.cotisations_non_soldees)} accent="amber" icon="alert" />
           </div>
+
+          <SimpleMemberActions />
+
+          <Card className="rounded-[2rem] border-emerald-100 bg-emerald-50/80 p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">Identifiant membre</p>
+                <h2 className="mt-2 text-3xl font-black text-slate-950">{data.user.matricule ?? "-"}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  Utilisez ce matricule ou votre telephone WhatsApp avec votre PIN pour vous connecter.
+                </p>
+              </div>
+              <Link href="/carte" className="inline-flex items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95">
+                Voir ma carte
+              </Link>
+            </div>
+          </Card>
+
+          <Card className="rounded-[2rem] border-blue-100 bg-blue-50/70 p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-[color:var(--tbh-navy)] shadow-sm">
+                  <AppIcon name="speaker" className="h-6 w-6" />
+                </span>
+                <div>
+                  <h2 className="text-lg font-black text-slate-950">Ecouter l&apos;aide</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-700">
+                    Appuyez sur Ecouter pour entendre les actions principales de votre espace.
+                  </p>
+                </div>
+              </div>
+              <ListenButton text="Bienvenue dans votre espace membre Teranga Business Hub. Pour payer, appuyez sur Payer. Pour voir votre carte, appuyez sur Ma carte. Pour voir vos cotisations, appuyez sur Mes mois. Si vous avez besoin d'aide, utilisez le bouton Aide WhatsApp." />
+            </div>
+          </Card>
 
           <Card className="rounded-[2rem] border-white/70 bg-white/90 p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -120,7 +174,12 @@ export default function DashboardPage() {
                     }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-900">{formatNotificationType(notification.type)}</p>
+                      <div className="flex items-center gap-3">
+                        <span className={`flex h-10 w-10 items-center justify-center rounded-full ${notificationIconTone[notification.type]}`}>
+                          <AppIcon name={notificationIcons[notification.type]} />
+                        </span>
+                        <p className="text-sm font-semibold text-slate-900">{formatNotificationType(notification.type)}</p>
+                      </div>
                       <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
                         {notification.statut === "non_lu" ? "Non lue" : "Lue"}
                       </p>
@@ -145,9 +204,12 @@ export default function DashboardPage() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="rounded-[1.5rem] border border-slate-200 bg-slate-50/80 px-5 py-5 text-sm font-semibold text-[color:var(--tbh-navy)] transition hover:-translate-y-0.5 hover:border-[color:var(--tbh-red)] hover:bg-white"
+                  className="group flex min-h-28 items-center gap-4 rounded-[1.5rem] border border-slate-200 bg-slate-50/80 px-5 py-5 text-sm font-semibold text-[color:var(--tbh-navy)] transition hover:-translate-y-0.5 hover:border-[color:var(--tbh-red)] hover:bg-white"
                 >
-                  {item.label}
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white text-[color:var(--tbh-red)] shadow-sm transition group-hover:bg-[color:var(--tbh-red)] group-hover:text-white">
+                    <AppIcon name={item.icon} className="h-7 w-7" />
+                  </span>
+                  <span>{item.label}</span>
                 </Link>
               ))}
             </div>
@@ -175,17 +237,21 @@ function formatNotificationType(type: MemberNotification["type"]) {
   }
 }
 
-function StatCard({ label, value, accent }: { label: string; value: string; accent: "red" | "navy" | "amber" }) {
-  const accentClass =
-    accent === "red"
-      ? "from-[color:var(--tbh-red)]/12 to-white"
-      : accent === "amber"
-        ? "from-amber-100 to-white"
-        : "from-[color:var(--tbh-navy)]/12 to-white";
+function StatCard({ label, value, accent, icon }: { label: string; value: string; accent: "red" | "navy" | "amber"; icon: AppIconName }) {
+  const accentClass = {
+    red: "from-[color:var(--tbh-red)]/12 to-white text-[color:var(--tbh-red)]",
+    amber: "from-amber-100 to-white text-amber-700",
+    navy: "from-[color:var(--tbh-navy)]/12 to-white text-[color:var(--tbh-navy)]",
+  }[accent];
 
   return (
     <Card className={`rounded-[1.75rem] border-white/70 bg-gradient-to-br ${accentClass} p-6`}>
-      <p className="text-sm text-slate-600">{label}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm text-slate-600">{label}</p>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/90 shadow-sm">
+          <AppIcon name={icon} className="h-6 w-6" />
+        </span>
+      </div>
       <p className="mt-3 text-4xl font-black tracking-tight text-slate-950">{value}</p>
     </Card>
   );

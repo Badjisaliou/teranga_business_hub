@@ -20,19 +20,33 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'matricule',
+        'civilite',
         'nom',
         'prenom',
+        'date_naissance',
         'email',
         'telephone',
         'numero_cni',
         'adresse',
+        'pays_residence',
+        'region',
+        'departement',
+        'commune',
         'password',
+        'pin_hash',
+        'pin_configured_at',
+        'pin_failed_attempts',
+        'pin_locked_until',
+        'pin_reset_token_hash',
+        'pin_reset_token_expires_at',
+        'pin_reset_token_created_at',
         'role',
         'statut',
-        'photo_profil',
-        'kyc_statut',
         'date_adhesion',
         'date_expiration',
+        'cotisation_montant_mensuel',
+        'card_token',
+        'card_issued_at',
         'api_token',
         'api_token_created_at',
     ];
@@ -44,6 +58,7 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
+        'pin_hash',
         'remember_token',
         'api_token',
     ];
@@ -57,8 +72,15 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'date_naissance' => 'date',
             'date_adhesion' => 'datetime',
             'date_expiration' => 'datetime',
+            'cotisation_montant_mensuel' => 'integer',
+            'pin_configured_at' => 'datetime',
+            'pin_locked_until' => 'datetime',
+            'pin_reset_token_expires_at' => 'datetime',
+            'pin_reset_token_created_at' => 'datetime',
+            'card_issued_at' => 'datetime',
             'api_token_created_at' => 'datetime',
         ];
     }

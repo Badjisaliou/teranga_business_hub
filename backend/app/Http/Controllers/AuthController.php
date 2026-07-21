@@ -5,18 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\ContactValidationService;
 use App\Services\UserService;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    private const PASSWORD_RESET_TTL_MINUTES = 30;
+    private const ADMIN_CREATION_CONFIRMATION = 'CREER ADMIN';
 
     public function __construct(
         private readonly UserService $userService,
@@ -34,7 +30,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'nom' => ['required', 'string', 'max:255'],
             'prenom' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'telephone' => [
                 'required',
                 'string',
@@ -53,24 +49,53 @@ class AuthController extends Controller
                 'unique:users,numero_cni',
                 function (string $attribute, mixed $value, \Closure $fail): void {
                     if (!$this->contactValidationService->isValidSenegalCni(is_string($value) ? $value : null)) {
-                        $fail('Le numero CNI doit contenir exactement 13 chiffres.');
+                        $fail('Le numero CNI doit contenir entre 10 et 15 chiffres.');
                     }
                 },
             ],
             'adresse' => ['nullable', 'string', 'max:255'],
             'password' => ['required', 'string', 'min:8'],
+            'telephone_code' => ['nullable', 'string', 'size:6'],
             'registration_source' => ['nullable', 'string', 'in:admin_portal'],
             'admin_registration_secret' => ['nullable', 'string'],
+            'confirmation_phrase' => ['nullable', 'string', 'max:50'],
         ]);
 
-        if (($validated['registration_source'] ?? null) === 'admin_portal') {
-            $expectedSecret = (string) config('services.admin_portal.registration_secret', '');
-            $providedSecret = (string) ($validated['admin_registration_secret'] ?? '');
+        $isAuthenticatedAdminRegistration = $request->user()?->role === 'admin';
+        $isAdminPortalRegistration = ($validated['registration_source'] ?? null) === 'admin_portal'
+            || $isAuthenticatedAdminRegistration;
 
-            if ($expectedSecret === '' || !hash_equals($expectedSecret, $providedSecret)) {
-                abort(403, 'Invalid admin registration secret.');
+        if ($isAdminPortalRegistration) {
+            if (!$isAuthenticatedAdminRegistration) {
+                $expectedSecret = (string) config('services.admin_portal.registration_secret', '');
+                $providedSecret = (string) ($validated['admin_registration_secret'] ?? '');
+
+                if ($expectedSecret === '' || !hash_equals($expectedSecret, $providedSecret)) {
+                    return response()->json([
+                        'message' => 'Cle secrete de creation admin invalide ou non configuree.',
+                        'error_code' => 'admin_registration_secret_invalid',
+                    ], 403);
+                }
             }
+
+            if ((string) ($validated['confirmation_phrase'] ?? '') !== self::ADMIN_CREATION_CONFIRMATION) {
+                throw ValidationException::withMessages([
+                    'confirmation_phrase' => ['Saisissez CREER ADMIN pour confirmer la creation administrateur.'],
+                ]);
+            }
+
+            $validated['registration_source'] = 'admin_portal';
+        } else {
+            return response()->json([
+                'message' => 'Le parcours inscription membre passe maintenant par /api/adhesion/start puis paiement adhesion.',
+                'error_code' => 'member_registration_moved_to_adhesion',
+            ], 410);
         }
+
+        if (($validated['email'] ?? null) === '') {
+            $validated['email'] = null;
+        }
+        unset($validated['telephone_code'], $validated['confirmation_phrase']);
 
         $user = $this->userService->register($validated);
 
@@ -96,6 +121,9 @@ class AuthController extends Controller
         }
 
         $email = array_key_exists('email', $validated) ? trim((string) $validated['email']) : null;
+        if ($email === '') {
+            $email = null;
+        }
         $telephoneRaw = $validated['telephone'] ?? null;
         $telephone = is_string($telephoneRaw) ? $this->contactValidationService->normalizeSenegalPhone($telephoneRaw) : null;
         $numeroCni = array_key_exists('numero_cni', $validated) ? preg_replace('/\s+/', '', (string) $validated['numero_cni']) : null;
@@ -132,16 +160,69 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
+            'identifier' => ['required_without:email', 'string'],
+            'email' => ['nullable', 'email'],
+            'password' => ['required_without:pin', 'string'],
+            'pin' => ['required_without:password', 'string', 'regex:/^[0-9]{6}$/'],
         ]);
 
-        $result = $this->userService->login($validated['email'], $validated['password']);
+        $identifier = (string) ($validated['identifier'] ?? $validated['email']);
+        if (!filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+            if ($this->contactValidationService->isValidSenegalPhone($identifier)) {
+                $normalized = $this->contactValidationService->normalizeSenegalPhone($identifier);
+                if ($normalized !== null) {
+                    $identifier = $normalized;
+                }
+            }
+        }
+
+        $result = isset($validated['pin'])
+            ? $this->userService->loginWithPin($identifier, (string) $validated['pin'])
+            : $this->userService->login($identifier, (string) $validated['password']);
+
+        $responsePayload = [
+            'message' => 'Connexion reussie',
+            'user' => $result['user'],
+        ];
+        if (!$request->hasHeader('X-TBH-Portal')) {
+            $responsePayload['token'] = $result['token'];
+        }
+
+        return response()->json($responsePayload)
+            ->cookie($this->authenticationCookie((string) $result['token'], (string) $result['user']->role));
+    }
+
+    public function forgotPin(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'identifier' => ['required', 'string', 'max:120'],
+        ]);
 
         return response()->json([
-            'message' => 'Connexion reussie',
-            'token' => $result['token'],
-            'user' => $result['user'],
+            'message' => 'Contactez l administration afin de verifier votre identite et recevoir un lien unique de reinitialisation PIN.',
+        ]);
+    }
+
+    public function resetPin(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'token' => ['required', 'string'],
+            'pin' => ['required', 'string', 'regex:/^[0-9]{6}$/', 'confirmed'],
+        ]);
+
+        $updated = $this->userService->resetPinWithToken((string) $validated['token'], (string) $validated['pin']);
+
+        return response()->json([
+            'message' => 'PIN reinitialise avec succes.',
+            'user' => [
+                'id' => $updated->id,
+                'matricule' => $updated->matricule,
+                'nom' => $updated->nom,
+                'prenom' => $updated->prenom,
+                'telephone' => $updated->telephone,
+                'statut' => $updated->statut,
+                'pin_configured_at' => optional($updated->pin_configured_at)->toIso8601String(),
+            ],
         ]);
     }
 
@@ -151,103 +232,37 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Deconnexion reussie',
-        ]);
+        ])->withCookie(Cookie::forget(
+            $request->user()->role === 'admin'
+                ? (string) config('auth.admin_cookie_name', 'tbh_admin_session')
+                : (string) config('auth.member_cookie_name', 'tbh_member_session'),
+            '/',
+            config('auth.api_cookie_domain') ?: null,
+        ));
     }
 
-    public function forgotPassword(Request $request): JsonResponse
+    public function session(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'channel' => ['required', Rule::in(['email', 'telephone'])],
-            'identifier' => ['required', 'string', 'max:255'],
-        ]);
-
-        $channel = (string) $validated['channel'];
-        $identifier = trim((string) $validated['identifier']);
-
-        $user = null;
-        if ($channel === 'email') {
-            $user = User::where('email', $identifier)->first();
-        } else {
-            $normalized = $this->contactValidationService->normalizeSenegalPhone($identifier);
-            if ($normalized !== null) {
-                $user = User::where('telephone', $normalized)->first();
-            }
-        }
-
-        if ($user) {
-            $plainToken = Str::random(64);
-
-            DB::table('password_reset_tokens')->updateOrInsert(
-                ['email' => $user->email],
-                [
-                    'token' => Hash::make($plainToken),
-                    'created_at' => now(),
-                ],
-            );
-
-            $response = [
-                'message' => 'Si le compte existe, un token de reinitialisation a ete genere.',
-            ];
-
-            if (app()->environment(['local', 'testing'])) {
-                $response['dev_reset_token'] = $plainToken;
-                $response['email'] = $user->email;
-            }
-
-            return response()->json($response);
-        }
-
         return response()->json([
-            'message' => 'Si le compte existe, un token de reinitialisation a ete genere.',
+            'user' => $request->user(),
         ]);
     }
 
-    public function resetPassword(Request $request): JsonResponse
+    private function authenticationCookie(string $token, string $role): \Symfony\Component\HttpFoundation\Cookie
     {
-        $validated = $request->validate([
-            'email' => ['required', 'email'],
-            'token' => ['required', 'string'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-        ]);
-
-        $record = DB::table('password_reset_tokens')->where('email', $validated['email'])->first();
-        if (!$record) {
-            throw ValidationException::withMessages([
-                'email' => ['Token de reinitialisation invalide ou expire.'],
-            ]);
-        }
-
-        $createdAt = isset($record->created_at) ? Carbon::parse((string) $record->created_at) : null;
-        if ($createdAt === null || $createdAt->lt(now()->subMinutes(self::PASSWORD_RESET_TTL_MINUTES))) {
-            DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
-            throw ValidationException::withMessages([
-                'token' => ['Token de reinitialisation invalide ou expire.'],
-            ]);
-        }
-
-        if (!Hash::check($validated['token'], (string) $record->token)) {
-            throw ValidationException::withMessages([
-                'token' => ['Token de reinitialisation invalide ou expire.'],
-            ]);
-        }
-
-        $user = User::where('email', $validated['email'])->first();
-        if (!$user) {
-            DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
-            throw ValidationException::withMessages([
-                'email' => ['Compte introuvable.'],
-            ]);
-        }
-
-        $user->password = Hash::make($validated['password']);
-        $user->api_token = null;
-        $user->api_token_created_at = null;
-        $user->save();
-
-        DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
-
-        return response()->json([
-            'message' => 'Mot de passe reinitialise avec succes.',
-        ]);
+        return Cookie::make(
+            $role === 'admin'
+                ? (string) config('auth.admin_cookie_name', 'tbh_admin_session')
+                : (string) config('auth.member_cookie_name', 'tbh_member_session'),
+            $token,
+            (int) config('auth.api_token_ttl_minutes', 10080),
+            '/',
+            config('auth.api_cookie_domain') ?: null,
+            (bool) config('auth.api_cookie_secure', false),
+            true,
+            false,
+            (string) config('auth.api_cookie_same_site', 'lax'),
+        );
     }
+
 }

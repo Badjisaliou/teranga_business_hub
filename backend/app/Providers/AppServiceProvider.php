@@ -28,5 +28,11 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(60)->by($key);
         });
+
+        RateLimiter::for('account-recovery', function (Request $request) {
+            $identifier = strtolower(trim((string) $request->input('identifier')));
+
+            return Limit::perMinute(3)->by($request->ip() . '|' . sha1($identifier));
+        });
     }
 }

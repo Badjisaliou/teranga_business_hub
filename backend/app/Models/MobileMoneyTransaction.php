@@ -13,9 +13,20 @@ class MobileMoneyTransaction extends Model
         'montant',
         'reference',
         'methode_paiement',
+        'canal_paiement',
         'statut',
+        'failure_reason',
         'idempotency_key',
+        'checkout_url',
+        'expires_at',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'expires_at' => 'datetime',
+        ];
+    }
 
     public function user(): BelongsTo
     {

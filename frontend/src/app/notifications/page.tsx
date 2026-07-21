@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import MemberPageShell, { MemberEmptyState, MemberMessage } from "@/components/MemberPageShell";
 import Card from "@/components/ui/Card";
+import AppIcon, { AppIconName } from "@/components/ui/AppIcon";
 import { apiRequest, getAuthToken, MemberNotification } from "@/lib/api";
 import { useStatusGuard } from "@/lib/use-status-guard";
+import SessionGuardLoading from "@/components/SessionGuardLoading";
 
 type NotificationsResponse = {
   data: MemberNotification[];
@@ -60,7 +62,7 @@ export default function NotificationsPage() {
       await apiRequest(`/api/notifications/${notificationId}/read`, { method: "POST" }, token);
       await loadNotifications();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible de mettre la notification a jour.");
+      setError(err instanceof Error ? err.message : "Impossible de mettre la notification à jour.");
     } finally {
       setBusyId(null);
     }
@@ -87,20 +89,25 @@ export default function NotificationsPage() {
   }
 
   if (!ready) {
-    return <div className="min-h-screen bg-white" />;
+    return <SessionGuardLoading />;
   }
 
   return (
     <MemberPageShell
       eyebrow="Espace membre"
       title="Notifications"
-      description="Consultez vos alertes de paiement, de statut et les mises a jour importantes de votre espace membre."
+      description="Consultez vos alertes de paiement, de statut et les mises à jour importantes de votre espace membre."
       aside={
         data ? (
-          <div className="rounded-[1.5rem] border border-white/15 bg-white/10 px-5 py-4 backdrop-blur-sm">
-            <p className="text-xs uppercase tracking-[0.2em] text-blue-100">Non lues</p>
-            <p className="mt-2 text-3xl font-black">{data.meta.unread_count}</p>
-            <p className="text-sm text-blue-50/80">{data.meta.total} notification(s) au total</p>
+          <div className="flex items-center gap-4 rounded-[1.5rem] border border-white/15 bg-white/10 px-5 py-4 backdrop-blur-sm">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-white">
+              <AppIcon name="notification" className="h-7 w-7" />
+            </span>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-blue-100">Non lues</p>
+              <p className="mt-2 text-3xl font-black">{data.meta.unread_count}</p>
+              <p className="text-sm text-blue-50/80">{data.meta.total} notification(s) au total</p>
+            </div>
           </div>
         ) : null
       }
@@ -116,7 +123,7 @@ export default function NotificationsPage() {
                 <p className="mt-2 text-sm leading-7 text-slate-600">
                   {data.meta.unread_count > 0
                     ? "Marquez les alertes lues une fois traitees."
-                    : "Tout est a jour de votre cote."}
+                    : "Tout est à jour de votre côté."}
                 </p>
               </div>
               <button
@@ -125,7 +132,10 @@ export default function NotificationsPage() {
                 disabled={data.meta.unread_count === 0 || busyId === "all"}
                 className="rounded-md bg-[color:var(--tbh-red)] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {busyId === "all" ? "Mise a jour..." : "Tout marquer comme lu"}
+                <span className="inline-flex items-center gap-2">
+                  <AppIcon name="check" className="h-4 w-4" />
+                  {busyId === "all" ? "Mise à jour..." : "Tout marquer comme lu"}
+                </span>
               </button>
             </div>
           </Card>
@@ -142,6 +152,9 @@ export default function NotificationsPage() {
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
+                          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${notificationTone(notification.type, isUnread)}`}>
+                            <AppIcon name={notificationIcon(notification.type)} className="h-5 w-5" />
+                          </span>
                           <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white">
                             {formatNotificationType(notification.type)}
                           </span>
@@ -160,7 +173,10 @@ export default function NotificationsPage() {
                           disabled={busyId === notification.id}
                           className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {busyId === notification.id ? "Mise a jour..." : "Marquer comme lue"}
+                          <span className="inline-flex items-center gap-2">
+                            <AppIcon name="check" className="h-4 w-4" />
+                            {busyId === notification.id ? "Mise à jour..." : "Marquer comme lue"}
+                          </span>
                         </button>
                       ) : null}
                     </div>
@@ -177,6 +193,40 @@ export default function NotificationsPage() {
       )}
     </MemberPageShell>
   );
+}
+
+function notificationIcon(type: MemberNotification["type"]): AppIconName {
+  switch (type) {
+    case "paiement":
+      return "money";
+    case "retard":
+      return "alert";
+    case "profil_incomplet":
+      return "profile";
+    case "expiration":
+      return "calendar";
+    default:
+      return "notification";
+  }
+}
+
+function notificationTone(type: MemberNotification["type"], isUnread: boolean) {
+  if (!isUnread) {
+    return "bg-slate-100 text-slate-500";
+  }
+
+  switch (type) {
+    case "paiement":
+      return "bg-emerald-100 text-emerald-700";
+    case "retard":
+      return "bg-amber-100 text-amber-700";
+    case "profil_incomplet":
+      return "bg-blue-100 text-[color:var(--tbh-navy)]";
+    case "expiration":
+      return "bg-rose-100 text-rose-700";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
 }
 
 function formatNotificationType(type: MemberNotification["type"]) {

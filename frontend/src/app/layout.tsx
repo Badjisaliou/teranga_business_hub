@@ -5,8 +5,50 @@ import AppHeader from "@/components/AppHeader";
 import UserShell from "@/components/UserShell";
 
 export const metadata: Metadata = {
-  title: "Teranga Business Hub",
-  description: "Frontend Next.js de Teranga Business Hub",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://teranga-business-hub.vercel.app"),
+  title: {
+    default: "Teranga Business Hub",
+    template: "%s | Teranga Business Hub",
+  },
+  description:
+    "Teranga Business Hub accompagne les entrepreneurs dans la structuration de leurs projets et le financement solidaire sous conditions.",
+  applicationName: "Teranga Business Hub",
+  keywords: ["Teranga Business Hub", "entrepreneuriat", "cotisations", "accompagnement", "financement solidaire", "Sénégal"],
+  authors: [{ name: "Teranga Business Hub" }],
+  creator: "Teranga Business Hub",
+  publisher: "Teranga Business Hub",
+  icons: {
+    icon: "/tbh-logo.png",
+    shortcut: "/tbh-logo.png",
+    apple: "/tbh-logo.png",
+  },
+  openGraph: {
+    type: "website",
+    locale: "fr_SN",
+    siteName: "Teranga Business Hub",
+    title: "Teranga Business Hub",
+    description:
+      "Espace membre pour suivre adhesions, cotisations, paiements DexPay, notifications et carte membre numerique.",
+    images: [
+      {
+        url: "/tbh-logo.png",
+        width: 1200,
+        height: 1200,
+        alt: "Logo Teranga Business Hub",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Teranga Business Hub",
+    description:
+      "Espace membre pour suivre adhesions, cotisations, paiements DexPay, notifications et carte membre numerique.",
+    images: ["/tbh-logo.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
