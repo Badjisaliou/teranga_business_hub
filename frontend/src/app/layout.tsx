@@ -5,7 +5,7 @@ import AppHeader from "@/components/AppHeader";
 import UserShell from "@/components/UserShell";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://teranga-business-hub.vercel.app"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://terangabusinesshub.com"),
   title: {
     default: "Teranga Business Hub",
     template: "%s | Teranga Business Hub",
@@ -24,6 +24,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
+    url: "/",
     locale: "fr_SN",
     siteName: "Teranga Business Hub",
     title: "Teranga Business Hub",
@@ -48,6 +49,13 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
   },
 };
 
