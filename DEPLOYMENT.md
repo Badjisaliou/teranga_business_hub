@@ -186,6 +186,7 @@ Environment variable:
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=https://your-backend-domain.up.railway.app
+NEXT_PUBLIC_SITE_URL=https://terangabusinesshub.com
 ```
 
 Framework preset: `Next.js`
@@ -193,7 +194,7 @@ Framework preset: `Next.js`
 Use the final production domain in Railway `FRONTEND_URL`, for example:
 
 ```env
-FRONTEND_URL=https://teranga-business-hub.vercel.app
+FRONTEND_URL=https://terangabusinesshub.com
 ```
 
 Do not put a Vercel preview deployment URL here.

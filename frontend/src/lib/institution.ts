@@ -54,6 +54,8 @@ export const contributionPlans = [
 
 export const teamMembers = [
   { name: "Baye Assane Fall", role: "PDG et Directeur général", department: "Direction", photo: "/team/baye-assane-fall.jpeg" },
+  { name: "Mady Samb", role: "Directeur chargé des affaires juridiques", department: "Direction", photo: "/team/mady-samb.jpeg" },
+  { name: "Adjou Gning", role: "Responsable chargé des relations extérieures", department: "Direction", photo: "/team/Mr-Gningue.jpeg" },
   { name: "Thérèse Gomis", role: "Assistante de direction", department: "Direction", photo: "/team/therese-gomis.jpeg" },
   { name: "Mamadou Thiam", role: "Responsable administratif et financier", department: "Administration et finance", photo: "/team/mamadou-thiam.jpeg" },
   { name: "Massamba Daouda Sène", role: "Responsable des opérations", department: "Opérations", photo: "/team/massamba-daouda-sene.jpeg" },
